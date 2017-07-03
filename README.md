@@ -13,7 +13,7 @@
 r=`curl  -X POST https://api.webrtc.win:6601/v1/customer/login \
   -H "Content-Type:application/json" \
   -d '{
-    "user": "admin",
+    "user": "test",
     "password":  "123456"
    }'`
 ```
