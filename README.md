@@ -1,5 +1,5 @@
 * minihttpd-libcurl 之前基于这个测试修改
-* libevent-libcurl  确定新的架构及基础类库，zitao代码提交到此目录下
+* libevent-libcurl  确定新的架构及基础类库，@zitao后续代码提交到此目录下
 
 
 ## 基于HTTP/HTTPS多源P2P流媒体播放器
