@@ -1,11 +1,16 @@
+
 ## 基于HTTP/HTTPS多源P2P流媒体播放器
+
+
+### 整体架构
 
 客户端整体架构及流程如下：通过一个本地的HTTP Server(127.0.0.1),播放器端所有的数据请求都经过本地服务，客制化的HTTP Server去后台请求数据数据返回给播放器，最大程度的解耦各个模块。
 
 ![client architecture](fig/client_architecture.png)
 
 
-## API
+
+### API
 
 1. 登录返回Token,请求节点的时候需要此Token做为安全验证。通过调用我们提供的API接口（/v1/customer/login）并传入用户名和密码， 我们已经为访客提供了测试帐号（用户名：test　密码：123456），获取token的示例代码如下:
 
@@ -52,5 +57,13 @@ r=`curl -X GET "https://api.webrtc.win:6601/v1/customer/nodes?client_ip=127.0.0.
 }
 ```
 
-## 下载策略()
+### 下载策略(First-Aid算法，@xt补充)
+
+1. 获取节点列表，视频文件大小，算出文件固定码率(动态计算需要下载的部分文件)
+2. 节点按照节点质量排序
+3. 优质节点下载紧急部分，其它部分依次排序
+4. 获取剩余播发时间或者定时器触发，下一个下载周期
+
+
+具体原理参考：
 ![First-Aid](fig/firstaid.png)
