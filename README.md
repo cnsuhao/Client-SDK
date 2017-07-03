@@ -1,5 +1,7 @@
 ## 基于HTTP/HTTPS多源P2P流媒体播放器
 
+![client architecture](fig/client_architecture.png)
+![server monitor](fig/firstaid.png)
 
 ```
 r=`curl  -X POST https://api.webrtc.win:6601/v1/customer/login \
