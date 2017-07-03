@@ -1,5 +1,0 @@
----- handle_write_timeout Matches (4 in 1 files) ----
-Mini_httpd.c (z:\home\ym\shadowcdn\git_github\mini_httpd-1.27):static void handle_write_timeout( int sig );
-Mini_httpd.c (z:\home\ym\shadowcdn\git_github\mini_httpd-1.27):    (void) sigset( SIGALRM, handle_write_timeout );
-Mini_httpd.c (z:\home\ym\shadowcdn\git_github\mini_httpd-1.27):    (void) signal( SIGALRM, handle_write_timeout );
-Mini_httpd.c (z:\home\ym\shadowcdn\git_github\mini_httpd-1.27):handle_write_timeout( int sig )
