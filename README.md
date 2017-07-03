@@ -71,3 +71,6 @@ r=`curl -X GET "https://api.webrtc.win:6601/v1/customer/nodes?client_ip=127.0.0.
 
 具体原理参考：
 ![First-Aid](fig/firstaid.png)
+
+参考Brower端达到的效果（Chrome测试结果）：
+![First-Aid](fig/pearplayer.png)
