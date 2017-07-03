@@ -7,7 +7,7 @@
 
 ## API
 
-1. 登录返回Token,请求节点的时候需要此Token做为安全验证。
+1. 登录返回Token,请求节点的时候需要此Token做为安全验证。通过调用我们提供的API接口（/v1/customer/login）并传入用户名和密码， 我们已经为访客提供了测试帐号（用户名：test　密码：123456），获取token的示例代码如下:
 
 ```
 r=`curl  -X POST https://api.webrtc.win:6601/v1/customer/login \
@@ -52,5 +52,5 @@ r=`curl -X GET "https://api.webrtc.win:6601/v1/customer/nodes?client_ip=127.0.0.
 }
 ```
 
-
+## 下载策略()
 ![First-Aid](fig/firstaid.png)
