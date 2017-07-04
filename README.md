@@ -7,7 +7,7 @@
 
 ### 整体架构
 
-客户端整体架构及流程如下：通过一个本地的HTTP Server(127.0.0.1),播放器端所有的数据请求都经过本地服务，客制化的HTTP Server去后台请求数据数据返回给播放器，最大程度的解耦各个模块。
+客户端整体架构及流程如下：通过一个本地的HTTP Server(127.0.0.1),播放器端所有的数据请求都经过本地服务(至少要Hook HEAD GET请求，GET请求要支持Range参数)，客制化的HTTP Server去后台请求数据数据喂给播放器，最大程度的解耦各个模块。
 
 ![client architecture](fig/client_architecture.png)
 
