@@ -72,7 +72,7 @@ r=`curl -X GET "https://api.webrtc.win:6601/v1/customer/nodes?client_ip=127.0.0.
 5. 所有节点的失效的情况，直接回源请求该视频文件或者重新请求节点列表(此情况极端情况下发生)
 
 
-具体原理参考：
+具体原理图参考：
 ![First-Aid](fig/firstaid.png)
 
 参考Brower端达到的效果（Chrome测试结果）：
