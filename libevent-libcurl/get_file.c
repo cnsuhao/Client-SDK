@@ -8,79 +8,68 @@ size_t header_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
     return size * nitems;
 }
 
-/* 保存下载文件 */
 size_t write_file_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
     int ret = fwrite(buffer, size, nitems, userdata);
     fflush(userdata);
     return ret;
 }
 
-int get_file_range_cb(CURL *curlhandle, long * filesize, long pos, long off) {
-    struct curl_slist *headers = NULL;
-    /* 设置文件续传的位置给libcurl */
-    char range_str[1024];
-    if ( *(filesize) >= off ){
-        sprintf(range_str, "%ld-%ld", pos, off);
-    } else {
-        return 0;
-    }
-    curl_easy_setopt(curlhandle, CURLOPT_RANGE, range_str);
-    CURLcode r = CURLE_GOT_NOTHING;
-    r = curl_easy_perform(curlhandle);
-    if (headers != NULL)
-        curl_slist_free_all(headers);
-    if (r == CURLE_OK)
-        return 1;
-    else {
-        return 0;
-    }
-}
-
-int get_file_cb(const char * remote_file_path, const char * local_file_path, long range){
+int get_file_range_cb(const char * remote_file_path, const char * local_file_path, long * filesize, long pos, long range) {
     int ret = 1;
-    if (range <= 0 || remote_file_path == NULL || local_file_path == NULL){
+    if (remote_file_path == NULL || local_file_path == NULL || filesize == NULL || pos < 0 || range < 0){
         ret = 0;
         goto error;
     }
-    CURL *curlhandle = NULL;
-    curl_global_init(CURL_GLOBAL_ALL);
-    curlhandle = curl_easy_init();
-
-    long filesize = 0;
     FILE *local_file_ptr;
-    //采用追加方式打开文件，便于实现文件断点续传工作
     local_file_ptr = fopen(local_file_path, "ab+");
     if (local_file_ptr == NULL) {
         ret = 0;
         goto error;
     }
 
+    CURL *curlhandle = NULL;
+    curl_global_init(CURL_GLOBAL_ALL);
+    curlhandle = curl_easy_init();
     if (curlhandle == NULL){
         ret = 0;
         goto error;
     }
     curl_easy_setopt(curlhandle, CURLOPT_URL, remote_file_path);
-    /* 设置http 头部处理函数 */
     curl_easy_setopt(curlhandle, CURLOPT_HEADERFUNCTION, header_cb);
-    curl_easy_setopt(curlhandle, CURLOPT_HEADERDATA, &filesize);
+    curl_easy_setopt(curlhandle, CURLOPT_HEADERDATA, filesize);
     curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, local_file_ptr);
     curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, write_file_cb);
 
-    get_file_range_cb(curlhandle, &filesize, 0L, 0L);
-    for(long i = 1L; i < filesize; i = i + range){
-        if( i + range - 1 < filesize )
-            get_file_range_cb(curlhandle, &filesize, i, i + range - 1);
-        else
-            get_file_range_cb(curlhandle, &filesize, i, filesize - 1);
+    struct curl_slist *headers = NULL;
+    char range_str[1024];
+    if ( *(filesize) >= pos + range - 1 ){
+        sprintf(range_str, "%ld-%ld", pos, pos + range - 1);
+    } else {
+        ret = 0;
+        goto error;
     }
-
+    curl_easy_setopt(curlhandle, CURLOPT_RANGE, range_str);
+    CURLcode r = curl_easy_perform(curlhandle);
+    if (r != CURLE_OK)
+        ret = 0;
 error:
     if (local_file_ptr) {
         fclose(local_file_ptr);
     }
+    if (headers != NULL)
+        curl_slist_free_all(headers);
     curl_easy_cleanup(curlhandle);
     curl_global_cleanup();
     return ret;
+}
+
+int get_file_cb(const char ** remote_file_paths, const char * local_file_path, long range){
+
+    long filesize = 0L;
+    get_file_range_cb("http://183.60.40.104/qq/tv/1.txt", local_file_path, &filesize, 0L, 1L);
+    get_file_range_cb("http://183.60.40.104/qq/tv/1.txt", local_file_path, &filesize, 1L, 10L);
+    get_file_range_cb("http://183.60.40.104/qq/tv/1.txt", local_file_path, &filesize, 11L, 10L);
+    get_file_range_cb("http://183.60.40.104/qq/tv/1.txt", local_file_path, &filesize, 20L, 9L);
 }
 
 size_t parse_token_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
@@ -177,23 +166,11 @@ error:
 }
 
 int vdn_proc(const char * uri){
-    char token[1024];
-    char nodes[2048];
-    login_cb("test", "123456", token);
-    printf("token: %s\n", token);
-    get_node_cb("127.0.0.1", "qq.webrtc.win", "/tv/pear001.mp4", "ab340d4befcf324a0a1466c166c10d1d", token, nodes);
-//    json_t *root;
-//    json_error_t error;
-//    root = json_loads(buffer, 0, &error);
-//    if (!root) {
-//        return 0;
-//    }
-//    json_t *info_str_json = json_object_get(root, "token");
-//    const char *info_str = json_string_value(info_str_json);
-//    strcpy(userdata, info_str);
-//    json_decref(root);
-
-    printf("nodes: %s\n", nodes);
-
-    get_file_cb("http://183.60.40.104/qq/tv/1.txt", "1.txt", 10L);
+//    char token[1024];
+//    char nodes[2048];
+//    login_cb("test", "123456", token);
+//    printf("token: %s\n", token);
+//    get_node_cb("127.0.0.1", "qq.webrtc.win", "/tv/pear001.mp4", "ab340d4befcf324a0a1466c166c10d1d", token, nodes);
+//    printf("nodes: %s\n", nodes);
+    get_file_cb(NULL, "1.txt", 10L);
 }

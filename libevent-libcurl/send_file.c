@@ -25,7 +25,7 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
     int fd = -1;
     struct stat st;
 
-    //vdn_proc("");
+    vdn_proc("");
 
     if (evhttp_request_get_command(req) != EVHTTP_REQ_GET) {
         return;
