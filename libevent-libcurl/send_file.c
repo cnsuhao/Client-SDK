@@ -25,8 +25,6 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
     int fd = -1;
     struct stat st;
 
-    vdn_proc("");
-
     if (evhttp_request_get_command(req) != EVHTTP_REQ_GET) {
         return;
     }
@@ -39,7 +37,8 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
     }
 
     path = evhttp_uri_get_path(decoded);
-    if (!path) path = "/";
+    if (!path)
+        path = "/";
 
     decoded_path = evhttp_uridecode(path, 0, NULL);
     if (decoded_path == NULL)
@@ -54,6 +53,8 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
         goto err;
     }
     evutil_snprintf(whole_path, len, "%s/%s", docroot, decoded_path);
+
+    vdn_proc("/tv/pear001.mp4");
 
     if (stat(whole_path, &st)<0) {
         goto err;

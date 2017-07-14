@@ -36,6 +36,8 @@
 # endif
 #endif
 
+#define NODE_NUM_MAX 100
+
 static const struct table_entry {
     const char *extension;
     const char *content_type;
@@ -53,12 +55,12 @@ void send_file_cb(struct evhttp_request *req, void *arg);
 
 size_t header_cb(char *buffer, size_t size, size_t nitems, void *userdata);
 size_t write_file_cb(char *buffer, size_t size, size_t nitems, void *userdata);
-int get_file_range_cb(const char * remote_file_path, const char * local_file_path, long * filesize, long pos, long range);
-int get_file_cb(const char ** remote_file_paths, const char * local_file_path, long range);
+int get_file_range_cb(const char * remote_file_path, const char * local_file_path, const char * permission, long * filesize, long pos, long range);
+int get_file_cb(const char ** remote_file_paths, const char * local_file_path, size_t node_num, long range);
 size_t parse_token_cb(char *buffer, size_t size, size_t nitems, void *userdata);
 int login_cb(const char * username, const char * password, char * token);
 size_t parse_node_cb(char *buffer, size_t size, size_t nitems, void *userdata);
-int get_node_cb(char * client_ip, char * host, char * uri, char * md5, char * token, char * nodes);
+int get_node_cb(char * client_ip, char * host, const char * uri, char * md5, const char * token, char * nodes);
 
 int vdn_proc(const char * uri);
 

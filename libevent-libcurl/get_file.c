@@ -14,14 +14,14 @@ size_t write_file_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
     return ret;
 }
 
-int get_file_range_cb(const char * remote_file_path, const char * local_file_path, long * filesize, long pos, long range) {
+int get_file_range_cb(const char * remote_file_path, const char * local_file_path, const char * permission, long * filesize, long pos, long range) {
     int ret = 1;
     if (remote_file_path == NULL || local_file_path == NULL || filesize == NULL || pos < 0 || range < 0){
         ret = 0;
         goto error;
     }
     FILE *local_file_ptr;
-    local_file_ptr = fopen(local_file_path, "ab+");
+    local_file_ptr = fopen(local_file_path, permission);
     if (local_file_ptr == NULL) {
         ret = 0;
         goto error;
@@ -45,8 +45,7 @@ int get_file_range_cb(const char * remote_file_path, const char * local_file_pat
     if ( *(filesize) >= pos + range - 1 ){
         sprintf(range_str, "%ld-%ld", pos, pos + range - 1);
     } else {
-        ret = 0;
-        goto error;
+        sprintf(range_str, "%ld-", pos);
     }
     curl_easy_setopt(curlhandle, CURLOPT_RANGE, range_str);
     CURLcode r = curl_easy_perform(curlhandle);
@@ -63,26 +62,20 @@ error:
     return ret;
 }
 
-int get_file_cb(const char ** remote_file_paths, const char * local_file_path, long range){
+int get_file_cb(const char ** remote_file_paths, const char * local_file_path, size_t node_num, long range){
 
-    long filesize = 0L;
-    get_file_range_cb("http://183.60.40.104/qq/tv/1.txt", local_file_path, &filesize, 0L, 1L);
-    get_file_range_cb("http://183.60.40.104/qq/tv/1.txt", local_file_path, &filesize, 1L, 10L);
-    get_file_range_cb("http://183.60.40.104/qq/tv/1.txt", local_file_path, &filesize, 11L, 10L);
-    get_file_range_cb("http://183.60.40.104/qq/tv/1.txt", local_file_path, &filesize, 20L, 9L);
+    long filesize[NODE_NUM_MAX];
+    for(size_t i = 0; i < node_num; i++){
+        printf("node: %s\n", remote_file_paths[i]);
+        filesize[i] = 0L;
+        get_file_range_cb(remote_file_paths[i], local_file_path, "w", &filesize[i], 0L, 1L);
+        if( filesize[i] == 0L )
+            printf("node: %s cant get data\n", remote_file_paths[i]);
+    }
 }
 
-size_t parse_token_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
-    json_t *root;
-    json_error_t error;
-    root = json_loads(buffer, 0, &error);
-    if (!root) {
-        return 0;
-    }
-    json_t *info_str_json = json_object_get(root, "token");
-    const char *info_str = json_string_value(info_str_json);
-    strcpy(userdata, info_str);
-    json_decref(root);
+size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
+    strcpy(userdata, buffer);
     return 1;
 }
 
@@ -104,7 +97,7 @@ int login_cb(const char * username, const char * password, char * token){
     }
     curl_easy_setopt(curlhandle, CURLOPT_URL, "https://api.webrtc.win:6601/v1/customer/login");
     curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, token);
-    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, parse_token_cb);
+    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, get_json_cb);
     struct curl_slist *list = curl_slist_append(NULL, "Content-Type:application/json");
     curl_easy_setopt(curlhandle, CURLOPT_HTTPHEADER, list);
     curl_easy_setopt(curlhandle, CURLOPT_POSTFIELDS, jsonData);
@@ -120,12 +113,7 @@ error:
     return ret;
 }
 
-size_t parse_node_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
-    strcpy(userdata, buffer);
-    return 1;
-}
-
-int get_node_cb(char * client_ip, char * host, char * uri, char * md5, char * token, char * nodes){
+int get_node_cb(char * client_ip, char * host, const char * uri, char * md5, const char * token, char * nodes){
     int ret = 1;
     if (client_ip == NULL || host == NULL || uri == NULL || md5 == NULL || token == NULL){
         ret = 0;
@@ -138,7 +126,6 @@ int get_node_cb(char * client_ip, char * host, char * uri, char * md5, char * to
     sprintf(token_header, "X-Pear-Token: %s", token);
     printf("url: %s\n", url);
 
-
     CURL *curlhandle = NULL;
     curl_global_init(CURL_GLOBAL_ALL);
     curlhandle = curl_easy_init();
@@ -149,7 +136,7 @@ int get_node_cb(char * client_ip, char * host, char * uri, char * md5, char * to
 
     curl_easy_setopt(curlhandle, CURLOPT_URL, url);
     curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, nodes);
-    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, parse_node_cb);
+    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, get_json_cb);
     struct curl_slist *list = curl_slist_append(NULL, "Content-Type:application/json");
     list = curl_slist_append(list, token_header);
     curl_easy_setopt(curlhandle, CURLOPT_HTTPHEADER, list);
@@ -166,11 +153,36 @@ error:
 }
 
 int vdn_proc(const char * uri){
-//    char token[1024];
-//    char nodes[2048];
-//    login_cb("test", "123456", token);
-//    printf("token: %s\n", token);
-//    get_node_cb("127.0.0.1", "qq.webrtc.win", "/tv/pear001.mp4", "ab340d4befcf324a0a1466c166c10d1d", token, nodes);
-//    printf("nodes: %s\n", nodes);
-    get_file_cb(NULL, "1.txt", 10L);
+    char token[1024*10];
+    char nodes[1024*20];
+    char remote_file_paths[NODE_NUM_MAX][1024];
+    login_cb("test", "123456", token);
+    json_error_t error;
+    json_t *root = json_loads(token, 0, &error);
+    if (!root) {
+       login_cb("test", "123456", token);
+       root = json_loads(token, 0, &error);
+    }
+    json_t *token_j = json_object_get(root, "token");
+    const char *token_str = json_string_value(token_j);
+
+    get_node_cb("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", token_str, nodes);
+    root = json_loads(nodes, 0, &error);
+    while (!root) {
+        get_node_cb("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", token_str, nodes);
+        root = json_loads(nodes, 0, &error);
+    }
+    size_t node_num = json_array_size(json_object_get(root, "nodes"));
+    for(size_t i = 0; i < node_num; i++){
+        json_t *node = json_array_get(json_object_get(root, "nodes"), i);
+        json_t *protocol = json_object_get(node, "protocol");
+        json_t *host = json_object_get(node, "host");
+        const char *host_str = json_string_value(host);
+        const char *protocol_str = json_string_value(protocol);
+        sprintf(remote_file_paths[i], "%s://%s%s", protocol_str, host_str, uri);
+        printf("node%ld: %s\n", i, remote_file_paths[i]);
+    }
+    json_decref(root);
+    printf("node num %ld\n", node_num);
+    get_file_cb((const char **)remote_file_paths, "1.mp4", node_num, 10L);
 }
