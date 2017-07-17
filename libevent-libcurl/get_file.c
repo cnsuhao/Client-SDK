@@ -14,7 +14,7 @@ size_t write_file_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
     return ret;
 }
 
-int get_file_range_cb(const char * remote_file_path, const char * local_file_path, const char * permission, long * filesize, long pos, long range) {
+int get_file_range(const char * remote_file_path, const char * local_file_path, const char * permission, long * filesize, long pos, long range) {
     int ret = 1;
     if (remote_file_path == NULL || local_file_path == NULL || filesize == NULL || pos < 0 || range < 0){
         ret = 0;
@@ -62,13 +62,13 @@ error:
     return ret;
 }
 
-int get_file_cb(const char ** remote_file_paths, const char * local_file_path, size_t node_num, long range){
+int get_file(const char ** remote_file_paths, const char * local_file_path, size_t node_num, long range){
 
     long filesize[NODE_NUM_MAX];
     for(size_t i = 0; i < node_num; i++){
         printf("node: %s\n", remote_file_paths[i]);
         filesize[i] = 0L;
-        get_file_range_cb(remote_file_paths[i], local_file_path, "w", &filesize[i], 0L, 1L);
+        get_file_range(remote_file_paths[i], local_file_path, "w", &filesize[i], 0L, 1L);
         if( filesize[i] == 0L )
             printf("node: %s cant get data\n", remote_file_paths[i]);
     }
@@ -80,7 +80,7 @@ size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
     return 1;
 }
 
-int login_cb(const char * username, const char * password, char * token){
+int login(const char * username, const char * password, char * token){
     int ret = 1;
     if (username == NULL || password == NULL){
         ret = 0;
@@ -114,7 +114,7 @@ error:
     return ret;
 }
 
-int get_node_cb(char * client_ip, char * host, const char * uri, char * md5, const char * token, char * nodes){
+int get_node(char * client_ip, char * host, const char * uri, char * md5, const char * token, char * nodes){
     int ret = 1;
     if (client_ip == NULL || host == NULL || uri == NULL || md5 == NULL || token == NULL){
         ret = 0;
@@ -157,21 +157,21 @@ int vdn_proc(const char * uri){
     char nodes[1024*20];
     memset(nodes, 0, 1024*20);
     char remote_file_paths[NODE_NUM_MAX][1024];
-//    login_cb("test", "123456", token);
+//    login("test", "123456", token);
     json_error_t error;
     json_t *root = json_loads(token, 0, &error);
 //    if (!root) {
-//       login_cb("test", "123456", token);
+//       login("test", "123456", token);
 //       root = json_loads(token, 0, &error);
 //    }
 //    json_t *token_j = json_object_get(root, "token");
 //    const char *token_str = json_string_value(token_j);
 
-    get_node_cb("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", "", nodes);
+    get_node("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", "", nodes);
     //printf("node: <%s>\n", nodes);
     //    root = json_loads(nodes, 0, &error);
     //    while (!json_is_array(root)) {
-    //        get_node_cb("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", token_str, nodes);
+    //        get_node("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", token_str, nodes);
     //        memset(nodes, 0, 1024*20);
     //        root = json_loads(nodes, 0, &error);
     //        break;
@@ -188,5 +188,5 @@ int vdn_proc(const char * uri){
     }
     json_decref(root);
     printf("node num %ld\n", node_num);
-    get_file_cb((const char **)remote_file_paths, "1.mp4", node_num, 10L);
+    get_file((const char **)remote_file_paths, "1.mp4", node_num, 10L);
 }
