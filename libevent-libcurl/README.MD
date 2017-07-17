@@ -1,5 +1,5 @@
 # 编译方式
-make clean
+make clean<br>
 make
 # 使用方式
 ./server ~/test
