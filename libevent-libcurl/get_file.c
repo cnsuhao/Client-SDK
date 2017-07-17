@@ -75,6 +75,7 @@ int get_file_cb(const char ** remote_file_paths, const char * local_file_path, s
 }
 
 size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
+    printf("%s\n%ld\n%ld\n%s\n", buffer, size, nitems, (char *)userdata);
     strcpy(userdata, buffer);
     return 1;
 }
@@ -123,8 +124,7 @@ int get_node_cb(char * client_ip, char * host, const char * uri, char * md5, con
     char url[1024];
     sprintf(url, "https://api.webrtc.win:6601/v1/customer/nodes?client_ip=%s&host=%s&uri=%s&md5=%s", client_ip, host, uri, md5);
     char token_header[1024];
-    sprintf(token_header, "X-Pear-Token: %s", token);
-    printf("url: %s\n", url);
+    sprintf(token_header, "X-Pear-Token: %s", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwZWFyIjoicGVhci1yZXN0ZnVsLWFwaS0zMzQ0IiwiZXhwIjoxNTAwMjg2MDE4LCJqdGkiOiIxODMuNjAuNDAuMTA0OjE2MDEwIiwiaXNzIjoiZm9nLWxvZ2luLWFwaSIsInN1YiI6InRlc3QifQ.qqfPwhsFRd-HcxnAUebk5QUDZUAlMl2Ko5xLkZuP2Og");
 
     CURL *curlhandle = NULL;
     curl_global_init(CURL_GLOBAL_ALL);
@@ -137,8 +137,8 @@ int get_node_cb(char * client_ip, char * host, const char * uri, char * md5, con
     curl_easy_setopt(curlhandle, CURLOPT_URL, url);
     curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, nodes);
     curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, get_json_cb);
-    struct curl_slist *list = curl_slist_append(NULL, "Content-Type:application/json");
-    list = curl_slist_append(list, token_header);
+    struct curl_slist *list = curl_slist_append(NULL, token_header);
+    list = curl_slist_append(list, "Content-Type:application/json");
     curl_easy_setopt(curlhandle, CURLOPT_HTTPHEADER, list);
 
     CURLcode res = curl_easy_perform(curlhandle);
@@ -155,23 +155,27 @@ error:
 int vdn_proc(const char * uri){
     char token[1024*10];
     char nodes[1024*20];
+    memset(nodes, 0, 1024*20);
     char remote_file_paths[NODE_NUM_MAX][1024];
-    login_cb("test", "123456", token);
+//    login_cb("test", "123456", token);
     json_error_t error;
     json_t *root = json_loads(token, 0, &error);
-    if (!root) {
-       login_cb("test", "123456", token);
-       root = json_loads(token, 0, &error);
-    }
-    json_t *token_j = json_object_get(root, "token");
-    const char *token_str = json_string_value(token_j);
+//    if (!root) {
+//       login_cb("test", "123456", token);
+//       root = json_loads(token, 0, &error);
+//    }
+//    json_t *token_j = json_object_get(root, "token");
+//    const char *token_str = json_string_value(token_j);
 
-    get_node_cb("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", token_str, nodes);
-    root = json_loads(nodes, 0, &error);
-    while (!root) {
-        get_node_cb("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", token_str, nodes);
-        root = json_loads(nodes, 0, &error);
-    }
+    get_node_cb("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", "", nodes);
+    //printf("node: <%s>\n", nodes);
+    //    root = json_loads(nodes, 0, &error);
+    //    while (!json_is_array(root)) {
+    //        get_node_cb("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", token_str, nodes);
+    //        memset(nodes, 0, 1024*20);
+    //        root = json_loads(nodes, 0, &error);
+    //        break;
+    //    }
     size_t node_num = json_array_size(json_object_get(root, "nodes"));
     for(size_t i = 0; i < node_num; i++){
         json_t *node = json_array_get(json_object_get(root, "nodes"), i);
