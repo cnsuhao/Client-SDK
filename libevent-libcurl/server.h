@@ -1,3 +1,5 @@
+/* http://www.cnblogs.com/zlcxbb/p/6006861.html */
+
 #ifndef __SERVER_H_
 #define __SERVER_H_
 #include <stdio.h>
@@ -13,6 +15,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <pthread.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -37,6 +40,7 @@
 #endif
 
 #define NODE_NUM_MAX 100
+#define THREAD_NUM_MAX 100
 
 static const struct table_entry {
     const char *extension;
@@ -47,6 +51,16 @@ static const struct table_entry {
 { "mp4", "video/mp4" },
 { NULL, NULL },
 };
+
+struct file_transfer_session_info {
+    char remote_file_path[1024];
+    char local_file_path[1024];
+    long range;
+    char permission[5];
+    long filesize;
+    long pos;
+};
+
 
 /* guess_content_type
  * 猜测请求的文件类型
@@ -79,24 +93,17 @@ size_t header_cb(char *buffer, size_t size, size_t nitems, void *userdata);
 size_t write_file_cb(char *buffer, size_t size, size_t nitems, void *userdata);
 /* get_file_range
  * 从webrtc服务器请求视频文件中部分数据的函数
- * remote_file_path: 服务器上的文件地址
- * local_file_path: 本地文件地址
- * permission: 文件的打开权限
- * filesize: 文件大小
- * pos: 文件读取的起始范围
- * range: 文件读取的范围
+ * ftsi: 文件传输会话的具体信息
  * return: 请求是否成功
 */
-int get_file_range(const char * remote_file_path, const char * local_file_path, const char * permission, long * filesize, long pos, long range);
+int get_file_range(struct file_transfer_session_info * ftsi);
 /* get_file
  * 从webrtc服务器请求整个视频文件的函数
- * remote_file_paths: 返回的多个webrtc节点上的文件地址
- * local_file_path: 本地文件地址
+ * ftsi_list: 不同节点的文件传输会话的具体信息
  * node_num: 节点数量
- * range: 文件读取的范围
  * return: 请求是否成功
 */
-int get_file(const char ** remote_file_paths, const char * local_file_path, size_t node_num, long range);
+int get_file(struct file_transfer_session_info * ftsi_list, size_t node_num);
 /* get_json_cb
  * 从webrtc服务器获取json数据的回调函数
  * buffer: 从服务器读取到的视频文件数据
