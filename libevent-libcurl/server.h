@@ -97,6 +97,11 @@ size_t write_file_cb(char *buffer, size_t size, size_t nitems, void *userdata);
  * return: 请求是否成功
 */
 int get_file_range(struct file_transfer_session_info * ftsi);
+/* thread_run
+ * 从webrtc服务器请求视频文件中部分数据的线程函数
+ * ftsi: 文件传输会话的具体信息
+*/
+void *thread_run(void *ftsi);
 /* get_file
  * 从webrtc服务器请求整个视频文件的函数
  * ftsi_list: 不同节点的文件传输会话的具体信息

@@ -58,41 +58,40 @@ error:
     return ret;
 }
 
+void *thread_run(void *ftsi){
+    get_file_range((struct file_transfer_session_info *)ftsi);
+}
+
 int get_file(struct file_transfer_session_info * ftsi_list, size_t node_num){
     pthread_t tid[THREAD_NUM_MAX];
-    int good_node_sign[NODE_NUM_MAX];
+    size_t alive_node_num = 0L;
 
     for(size_t i = 0; i < node_num; i++){
         strcpy(ftsi_list[i].permission, "w");
         ftsi_list[i].pos = 0L;
         ftsi_list[i].range = 1L;
         get_file_range(&ftsi_list[i]);
-        if( ftsi_list[i].filesize == 0L ){
-            good_node_sign[i] = 0;
-            printf("node: %s cant get data\n", ftsi_list[i].remote_file_path);
-        }
-        else{
-            good_node_sign[i] = 1;
-            printf("node: %s can get data\n", ftsi_list[i].remote_file_path);
+    }
+
+    for(size_t i = 0; i < node_num; i++) {
+        strcpy(ftsi_list[i].permission, "ab+");
+        ftsi_list[i].pos = 0L;
+        ftsi_list[i].range = 80000000L;
+        if ( ftsi_list[i].filesize != 0L ) {
+            printf("node alive: %s\n", ftsi_list[i].remote_file_path);
+            int error = pthread_create(&tid[alive_node_num], NULL, thread_run, (void *)&(ftsi_list[i]));
+            if (error)
+                fprintf(stderr, "thread number %ld down\n", i);
+            else
+                fprintf(stderr, "Thread %ld\n", i);
+            alive_node_num++;
         }
     }
 
-    //    for(int i=0; i< NUMT; i++) {
-    //        int error = pthread_create(&tid[i],
-    //                               NULL, /* default attributes please */
-    //                               pull_one_url,
-    //                               (void *)urls[i]);
-    //        if(0 != error)
-    //            fprintf(stderr, "Couldn't run thread number %d, errno %d\n", i, error);
-    //        else
-    //            fprintf(stderr, "Thread %d, gets %s\n", i, urls[i]);
-    //    }
-
-    //    /* now wait for all threads to terminate */
-    //    for(i=0; i< NUMT; i++) {
-    //        error = pthread_join(tid[i], NULL);
-    //        fprintf(stderr, "Thread %d terminated\n", i);
-    //    }
+    for(size_t i = 0; i < alive_node_num; i++) {
+        int error = pthread_join(tid[i], NULL);
+        fprintf(stderr, "Thread %ld terminated\n", i);
+    }
 }
 
 size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
