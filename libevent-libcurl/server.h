@@ -106,9 +106,10 @@ void *thread_run(void *ftsi);
  * 从webrtc服务器请求整个视频文件的函数
  * ftsi_list: 不同节点的文件传输会话的具体信息
  * node_num: 节点数量
+ * range: 字节长度
  * return: 请求是否成功
 */
-int get_file(struct file_transfer_session_info * ftsi_list, size_t node_num);
+int get_file(struct file_transfer_session_info * node_list, size_t node_num, long range);
 /* get_json_cb
  * 从webrtc服务器获取json数据的回调函数
  * buffer: 从服务器读取到的视频文件数据

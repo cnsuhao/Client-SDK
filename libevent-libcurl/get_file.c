@@ -59,37 +59,56 @@ error:
 }
 
 void *thread_run(void *ftsi){
-    get_file_range((struct file_transfer_session_info *)ftsi);
+    struct file_transfer_session_info tmp_ftsi = *((struct file_transfer_session_info *)ftsi);
+    printf("thread run:<\n remote: %s\n local: %s\n permit: %s\n pos: %ld\n range: %ld\n fsize: %ld>\n",
+           tmp_ftsi.remote_file_path, tmp_ftsi.local_file_path, tmp_ftsi.permission,
+           tmp_ftsi.pos, tmp_ftsi.range, tmp_ftsi.filesize);
+    get_file_range(&tmp_ftsi);
 }
 
-int get_file(struct file_transfer_session_info * ftsi_list, size_t node_num){
+int get_file(struct file_transfer_session_info * node_list, size_t node_num, long range){
     pthread_t tid[THREAD_NUM_MAX];
+    long alive_nodes[NODE_NUM_MAX];
     size_t alive_node_num = 0L;
+    long file_size = 0L;
+    char local_file_path[1024];
+    size_t thread_count = 0;
+    struct file_transfer_session_info thread_ftsi[THREAD_NUM_MAX];
+    memset(thread_ftsi, 0, THREAD_NUM_MAX*sizeof(struct file_transfer_session_info));
+    memset(alive_nodes, 0, NODE_NUM_MAX*sizeof(int));
 
     for(size_t i = 0; i < node_num; i++){
-        strcpy(ftsi_list[i].permission, "w");
-        ftsi_list[i].pos = 0L;
-        ftsi_list[i].range = 1L;
-        get_file_range(&ftsi_list[i]);
-    }
-
-    for(size_t i = 0; i < node_num; i++) {
-        strcpy(ftsi_list[i].permission, "ab+");
-        ftsi_list[i].pos = 0L;
-        ftsi_list[i].range = 80000000L;
-        if ( ftsi_list[i].filesize != 0L ) {
-            printf("node alive: %s\n", ftsi_list[i].remote_file_path);
-            int error = pthread_create(&tid[alive_node_num], NULL, thread_run, (void *)&(ftsi_list[i]));
-            if (error)
-                fprintf(stderr, "thread number %ld down\n", i);
-            else
-                fprintf(stderr, "Thread %ld\n", i);
+        strcpy(node_list[i].permission, "w");
+        node_list[i].pos = 0L;
+        node_list[i].range = 1L;
+        get_file_range(&node_list[i]);
+        if ( node_list[i].filesize != 0L ) {
+            printf("node alive: %s\n", node_list[i].remote_file_path);
+            alive_nodes[alive_node_num] = i;
             alive_node_num++;
+            /* if filesize and local file path havent been updated */
+            if( file_size == 0 ){
+                file_size = node_list[i].filesize;
+                /* all the local_file_path is the same path */
+                strcpy(local_file_path, node_list[i].local_file_path);
+            }
         }
     }
 
-    for(size_t i = 0; i < alive_node_num; i++) {
-        int error = pthread_join(tid[i], NULL);
+    while (file_size > thread_count*range) {
+        long index = alive_nodes[thread_count%alive_node_num];
+        strcpy(thread_ftsi[thread_count].permission, "w");
+        strcpy(thread_ftsi[thread_count].remote_file_path, node_list[index].remote_file_path);
+        sprintf(thread_ftsi[thread_count].local_file_path, "%s.slice.%ld", local_file_path, thread_count);
+        thread_ftsi[thread_count].pos = thread_count * range;;
+        thread_ftsi[thread_count].range = range;
+        thread_ftsi[thread_count].filesize = file_size;
+        pthread_create(&tid[thread_count], NULL, thread_run, (void *)&(thread_ftsi[thread_count]));
+        thread_count++;
+    }
+
+    for(size_t i = 0; i < thread_count; i++) {
+        pthread_join(tid[i], NULL);
         fprintf(stderr, "Thread %ld terminated\n", i);
     }
 }
@@ -209,14 +228,12 @@ int vdn_proc(const char * uri){
         //        const char *host_str = json_string_value(host);
         //        const char *protocol_str = json_string_value(protocol);
         //        sprintf(ftsi_list[i].remote_file_path, "%s://%s/qq.webrtc.win/%s", protocol_str, host_str, uri);
-        strcpy(ftsi_list[i].local_file_path, "1.mp4");
+        strcpy(ftsi_list[i].local_file_path, "tmp/1.mp4");
     }
     json_decref(root);
     strcpy(ftsi_list[0].remote_file_path, "https://qq.webrtc.win/tv/pear001.mp4");
     strcpy(ftsi_list[1].remote_file_path, "https://000c29d049f4.webrtc.win:61530/qq.webrtc.win/tv/pear001.mp4");
-    ftsi_list[0].range = 10L;
-    ftsi_list[1].range = 10L;
     printf("node num %ld\n", node_num);
-    get_file(ftsi_list, node_num);
+    get_file(ftsi_list, node_num, 1024L*1024L);
     printf("vdn proc done\n");
 }
