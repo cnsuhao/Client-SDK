@@ -16,11 +16,13 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <pthread.h>
-
+#include<regex.h>
 #include <assert.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+
+
 #include <event2/event.h>
 #include <event2/http.h>
 #include <event2/buffer.h>
@@ -39,6 +41,7 @@
 # endif
 #endif
 
+#define URL_LENGTH_MAX 1024
 #define NODE_NUM_MAX 100
 #define THREAD_NUM_MAX 100
 
@@ -53,13 +56,20 @@ static const struct table_entry {
 };
 
 struct file_transfer_session_info {
-    char remote_file_path[1024];
-    char local_file_path[1024];
+    char protocol[10];
+    char remote_file_url[URL_LENGTH_MAX];
+    char local_file_path[URL_LENGTH_MAX];
     long range;
     char permission[5];
     long filesize;
     long pos;
 };
+
+static const long download_file_range = 10000000L;
+
+size_t thread_count;
+pthread_t thread_id[THREAD_NUM_MAX];
+
 
 
 /* guess_content_type
@@ -109,7 +119,7 @@ void *thread_run(void *ftsi);
  * range: 字节长度
  * return: 请求是否成功
 */
-int get_file(struct file_transfer_session_info * node_list, size_t node_num, long range);
+int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, long range);
 /* get_json_cb
  * 从webrtc服务器获取json数据的回调函数
  * buffer: 从服务器读取到的视频文件数据

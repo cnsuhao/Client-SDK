@@ -54,33 +54,45 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
     }
     evutil_snprintf(whole_path, len, "%s/%s", docroot, decoded_path);
 
-    vdn_proc("/tv/pear001.mp4");
+    //vdn_proc("/tv/pear001.mp4");
 
-    if (stat(whole_path, &st)<0) {
-        goto err;
-    }
+    const char *type = guess_content_type(decoded_path);
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);
+    evhttp_send_reply_start(req, HTTP_OK, "OK");
 
-    /* This holds the content we're sending. */
-    evb = evbuffer_new();
+    for(size_t i = 0; i < 8; i++) {
+        //pthread_join(thread_id[i], NULL);
+        fprintf(stderr, "Thread %ld terminated\n", i);
+        char file_slice[URL_LENGTH_MAX];
+        memset(file_slice, 0, URL_LENGTH_MAX*sizeof(char));
+        evutil_snprintf(file_slice, URL_LENGTH_MAX, "%s.slice.%ld", whole_path, i);
+        printf("file_slice: %s\n", file_slice);
 
-    if (S_ISDIR(st.st_mode)) {
-        goto err;
-    } else {
-        /* it's a file; add it to the buffer to get sent via sendfile */
-        const char *type = guess_content_type(decoded_path);
-        if ((fd = open(whole_path, O_RDONLY)) < 0) {
-            perror("open");
+
+        if (stat(file_slice, &st)<0) {
             goto err;
         }
-        if (fstat(fd, &st)<0) {
-            perror("fstat");
+        /* This holds the content we're sending. */
+        evb = evbuffer_new();
+        if (S_ISDIR(st.st_mode)) {
             goto err;
+        } else {
+            /* it's a file; add it to the buffer to get sent via sendfile */
+            if ((fd = open(file_slice, O_RDONLY)) < 0) {
+                perror("open");
+                goto err;
+            }
+            if (fstat(fd, &st)<0) {
+                perror("fstat");
+                goto err;
+            }
+            evbuffer_add_file(evb, fd, 0, st.st_size);
         }
-        evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);
-        evbuffer_add_file(evb, fd, 0, st.st_size);
+        evhttp_send_reply_chunk(req, evb);
     }
+    /* 如果客户端提前终止了请求,会导致连接关闭的回调函数被调用, 但是在这个回调函数里没有调用 evhttp_send_reply_end(), 所以导致了内存泄露. */
+    evhttp_send_reply_end(req);
 
-    evhttp_send_reply(req, 200, "OK", evb);
     goto done;
 err:
     evhttp_send_error(req, 404, NULL);
