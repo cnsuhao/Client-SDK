@@ -27,29 +27,27 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
 
     size_t thread_count;
     pthread_t thread_id[THREAD_NUM_MAX];
+    time_t rawtime;
+
+    time(&rawtime);
 
     if (evhttp_request_get_command(req) != EVHTTP_REQ_GET) {
         return;
     }
-
     decoded = evhttp_uri_parse(uri);
     if (!decoded) {
         printf("It's not a good URI. Sending BADREQUEST\n");
         evhttp_send_error(req, HTTP_BADREQUEST, 0);
         return;
     }
-
     path = evhttp_uri_get_path(decoded);
     if (!path)
         path = "/";
-
     decoded_path = evhttp_uridecode(path, 0, NULL);
     if (decoded_path == NULL)
         goto err;
-
     if (strstr(decoded_path, ".."))
         goto err;
-
     len = strlen(decoded_path)+strlen(docroot)+2;
     if (!(whole_path = malloc(len))) {
         perror("malloc");
@@ -57,18 +55,18 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
     }
     evutil_snprintf(whole_path, len, "%s/%s", docroot, decoded_path);
 
-    vdn_proc("/tv/pear001.mp4", &thread_count, thread_id);
+    vdn_proc("/tv/pear001.mp4", &thread_count, thread_id, rawtime);
 
     const char *type = guess_content_type(decoded_path);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);
     evhttp_send_reply_start(req, HTTP_OK, "OK");
 
-    for(size_t i = 0; i < 8; i++) {
+    for(size_t i = 0; i < thread_count; i++) {
         pthread_join(thread_id[i], NULL);
         fprintf(stderr, "Thread %ld terminated\n", i);
         char file_slice[URL_LENGTH_MAX];
         memset(file_slice, 0, URL_LENGTH_MAX*sizeof(char));
-        evutil_snprintf(file_slice, URL_LENGTH_MAX, "%s.slice.%ld", whole_path, i);
+        evutil_snprintf(file_slice, URL_LENGTH_MAX, "%s.%ld.slice.%ld", whole_path, rawtime, i);
         printf("file_slice: %s\n", file_slice);
 
 
@@ -92,6 +90,9 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
             evbuffer_add_file(evb, fd, 0, st.st_size);
         }
         evhttp_send_reply_chunk(req, evb);
+
+        /* clean the tmp file for caching the video */
+        remove(file_slice);
     }
     /* 如果客户端提前终止了请求,会导致连接关闭的回调函数被调用, 但是在这个回调函数里没有调用 evhttp_send_reply_end(), 所以导致了内存泄露. */
     evhttp_send_reply_end(req);

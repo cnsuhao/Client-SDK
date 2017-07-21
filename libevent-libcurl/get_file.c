@@ -66,7 +66,12 @@ void *thread_run(void *ftsi){
     int ret = get_file_range(&tmp_ftsi);
 }
 
-int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, size_t * thread_count, pthread_t * thread_id, long range){
+int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, size_t * thread_count,
+             pthread_t * thread_id, long timestamp, long range){
+    if (node_ftsi == NULL || node_num <= 0 || thread_count == NULL
+            || thread_id == NULL || range <= 0L){
+        return 0;
+    }
     long alive_nodes[NODE_NUM_MAX];
     size_t alive_node_num = 0L;
     long file_size = 0L;
@@ -99,12 +104,18 @@ int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, siz
         }
     }
 
+    /* clean the tmp file for testing the available node */
+    remove(node_ftsi[0].local_file_path);
+
+    if (alive_node_num <= 0)
+        return 0;
+
     size_t t_ct = 0;
     while (file_size > t_ct*range) {
         long index = alive_nodes[t_ct%alive_node_num];
         strcpy(thread_ftsi[t_ct].permission, "w");
         strcpy(thread_ftsi[t_ct].remote_file_url, node_ftsi[index].remote_file_url);
-        sprintf(thread_ftsi[t_ct].local_file_path, "%s.slice.%ld", local_file_path, t_ct);
+        sprintf(thread_ftsi[t_ct].local_file_path, "%s.%ld.slice.%ld", local_file_path, timestamp, t_ct);
         thread_ftsi[t_ct].pos = t_ct * range;;
         thread_ftsi[t_ct].range = range;
         thread_ftsi[t_ct].filesize = file_size;
@@ -112,6 +123,7 @@ int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, siz
         t_ct++;
     }
     *thread_count = t_ct;
+    return 1;
 }
 
 size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
@@ -190,7 +202,7 @@ error:
     return ret;
 }
 
-int vdn_proc(const char * uri, size_t *thread_count, pthread_t *thread_id){
+int vdn_proc(const char * uri, size_t *thread_count, pthread_t *thread_id, long timestamp){
     char token[URL_LENGTH_MAX*10];
     char nodes[URL_LENGTH_MAX*20];
     struct file_transfer_session_info ftsi_list[NODE_NUM_MAX];
@@ -256,6 +268,6 @@ int vdn_proc(const char * uri, size_t *thread_count, pthread_t *thread_id){
     strcpy(ftsi_list[0].local_file_path, "tmp/1.mp4");
     strcpy(ftsi_list[1].local_file_path, "tmp/1.mp4");
     printf("node num %ld\n", node_num);
-    get_file(ftsi_list, node_num, thread_count, thread_id, download_file_range);
+    get_file(ftsi_list, node_num, thread_count, thread_id, timestamp, download_file_range);
     printf("vdn proc done\n");
 }

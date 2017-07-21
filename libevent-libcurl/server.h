@@ -16,7 +16,8 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <pthread.h>
-#include<regex.h>
+#include <regex.h>
+#include <time.h>
 #include <assert.h>
 #include <errno.h>
 #include <sys/socket.h>
@@ -115,9 +116,12 @@ void *thread_run(void *ftsi);
  * thread_count: 线程数量的指针
  * thread_id: 线程数组的指针
  * range: 字节长度
+ * timestamp: 时间戳
  * return: 请求是否成功
 */
-int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, size_t * thread_count, pthread_t * thread_id, long range);
+int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num,
+             size_t * thread_count, pthread_t * thread_id,
+             long timestamp, long range);
 /* get_json_cb
  * 从webrtc服务器获取json数据的回调函数
  * buffer: 从服务器读取到的视频文件数据
@@ -152,9 +156,10 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
  * uri: 请求视频文件的uri
  * thread_count: 线程数量的指针
  * thread_id: 线程数组的指针
+ * timestamp: 时间戳
  * return: 请求是否成功
 */
-int vdn_proc(const char * uri, size_t * thread_count, pthread_t * thread_id);
+int vdn_proc(const char * uri, size_t * thread_count, pthread_t * thread_id, long timestamp);
 
 
 #endif
