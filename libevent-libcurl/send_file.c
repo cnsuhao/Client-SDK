@@ -25,6 +25,9 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
     int fd = -1;
     struct stat st;
 
+    size_t thread_count;
+    pthread_t thread_id[THREAD_NUM_MAX];
+
     if (evhttp_request_get_command(req) != EVHTTP_REQ_GET) {
         return;
     }
@@ -54,14 +57,14 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
     }
     evutil_snprintf(whole_path, len, "%s/%s", docroot, decoded_path);
 
-    //vdn_proc("/tv/pear001.mp4");
+    vdn_proc("/tv/pear001.mp4", &thread_count, thread_id);
 
     const char *type = guess_content_type(decoded_path);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);
     evhttp_send_reply_start(req, HTTP_OK, "OK");
 
     for(size_t i = 0; i < 8; i++) {
-        //pthread_join(thread_id[i], NULL);
+        pthread_join(thread_id[i], NULL);
         fprintf(stderr, "Thread %ld terminated\n", i);
         char file_slice[URL_LENGTH_MAX];
         memset(file_slice, 0, URL_LENGTH_MAX*sizeof(char));

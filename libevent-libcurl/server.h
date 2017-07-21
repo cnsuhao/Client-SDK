@@ -67,10 +67,6 @@ struct file_transfer_session_info {
 
 static const long download_file_range = 10000000L;
 
-size_t thread_count;
-pthread_t thread_id[THREAD_NUM_MAX];
-
-
 
 /* guess_content_type
  * 猜测请求的文件类型
@@ -116,10 +112,12 @@ void *thread_run(void *ftsi);
  * 从webrtc服务器请求整个视频文件的函数
  * ftsi_list: 不同节点的文件传输会话的具体信息
  * node_num: 节点数量
+ * thread_count: 线程数量的指针
+ * thread_id: 线程数组的指针
  * range: 字节长度
  * return: 请求是否成功
 */
-int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, long range);
+int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, size_t * thread_count, pthread_t * thread_id, long range);
 /* get_json_cb
  * 从webrtc服务器获取json数据的回调函数
  * buffer: 从服务器读取到的视频文件数据
@@ -152,9 +150,11 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
 /* vdn_proc
  * 从webrtc服务器请求视频文件的主函数
  * uri: 请求视频文件的uri
+ * thread_count: 线程数量的指针
+ * thread_id: 线程数组的指针
  * return: 请求是否成功
 */
-int vdn_proc(const char * uri);
+int vdn_proc(const char * uri, size_t * thread_count, pthread_t * thread_id);
 
 
 #endif
