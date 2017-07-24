@@ -75,7 +75,7 @@ r=`curl -X GET "https://api.webrtc.win:6601/v1/customer/nodes?client_ip=127.0.0.
 
 
 参考Browser流程：
-![流程](fig/http://git.oschina.net/FogVDN/general-doc/blob/master/%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E5%92%8CVisio%E5%8E%9F%E5%9B%BE/PearPlayer%E6%9E%B6%E6%9E%84%E5%8F%8A%E6%B5%81%E7%A8%8B.png)
+![流程](http://git.oschina.net/FogVDN/general-doc/raw/master/%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E5%92%8CVisio%E5%8E%9F%E5%9B%BE/PearPlayer%E6%9E%B6%E6%9E%84%E5%8F%8A%E6%B5%81%E7%A8%8B.png)
 
 
 具体原理图参考：
