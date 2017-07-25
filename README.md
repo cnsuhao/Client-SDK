@@ -2,6 +2,9 @@
 * libevent-libcurl  确定新的架构及基础类库，@zitao后续代码提交到此目录下
 
 
+### Bug fix
+* [evhttp_send_reply_chunk do not send chunk until calling evhttp_send_reply_end](https://github.com/libevent/libevent/issues/536)
+
 ## 基于HTTP/HTTPS多源P2P流媒体播放器
 
 
