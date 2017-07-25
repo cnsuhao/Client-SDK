@@ -119,15 +119,19 @@ int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, siz
         thread_ftsi[t_ct].pos = t_ct * range;;
         thread_ftsi[t_ct].range = range;
         thread_ftsi[t_ct].filesize = file_size;
-//        pthread_create(&thread_id[t_ct], NULL, thread_run, (void *)&(thread_ftsi[t_ct]));
+        pthread_create(&thread_id[t_ct], NULL, thread_run, (void *)&(thread_ftsi[t_ct]));
         t_ct++;
     }
     *thread_count = t_ct;
     return 1;
 }
 
-size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
-    strcpy(userdata, buffer);
+/* return value must be size of data which has been process */
+size_t joint_string_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
+//    printf("buffer len: <<%ld>>\n", strlen(buffer));
+//    printf("userdata len: <<%ld>>\n", strlen((char *)userdata));
+//    printf("buffer: <<\n%s\n>>\n", buffer);
+    strcat(userdata, buffer);
     return size * nitems;
 }
 
@@ -149,7 +153,7 @@ int login(const char * username, const char * password, char * token){
     }
     curl_easy_setopt(curlhandle, CURLOPT_URL, "https://api.webrtc.win:6601/v1/customer/login");
     curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, token);
-    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, get_json_cb);
+    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, joint_string_cb);
     list = curl_slist_append(NULL, "Content-Type:application/json");
     curl_easy_setopt(curlhandle, CURLOPT_HTTPHEADER, list);
     curl_easy_setopt(curlhandle, CURLOPT_POSTFIELDS, jsonData);
@@ -186,7 +190,7 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
     }
     curl_easy_setopt(curlhandle, CURLOPT_URL, url);
     curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, nodes);
-    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, get_json_cb);
+    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, joint_string_cb);
     list = curl_slist_append(NULL, token_header);
     list = curl_slist_append(list, "Content-Type:application/json");
     curl_easy_setopt(curlhandle, CURLOPT_HTTPHEADER, list);
@@ -202,72 +206,78 @@ error:
     return ret;
 }
 
-int vdn_proc(const char * uri, size_t *thread_count, pthread_t *thread_id, long stamp){
-    char token[URL_LENGTH_MAX*10];
-    char nodes[URL_LENGTH_MAX*20];
+int vdn_proc(struct send_file_ctx *sfinfo){
+    int ret = 1;
+
+    char token[URL_LENGTH_MAX];
+    char nodes[URL_LENGTH_MAX*10];
     struct file_transfer_session_info ftsi_list[NODE_NUM_MAX];
     json_error_t error;
     json_t *root = NULL;
     size_t node_num = 0L;
 
-    memset(nodes, 0, URL_LENGTH_MAX*sizeof(char));
+    memset(token, 0, sizeof(token));
+    memset(nodes, 0, sizeof(nodes));
     memset(ftsi_list, 0, NODE_NUM_MAX*sizeof(struct file_transfer_session_info));
 
     /* Must initialize libcurl before any threads are started */
     curl_global_init(CURL_GLOBAL_ALL);
 
-    login("test", "123456", token);
+    ret = login(sfinfo->username, sfinfo->password, token);
     root = json_loads(token, 0, &error);
-    while (!root) {
-        login("test", "123456", token);
-        root = json_loads(token, 0, &error);
+    if (!root || !ret) {
+        ret = 0;
+        goto error;
     }
     json_t *token_j = json_object_get(root, "token");
     const char *token_str = json_string_value(token_j);
 
-    get_node("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", token_str, nodes);
-//    printf("node: <%s>\n", nodes);
-    /* use json to get node */
-//    root = json_loads(nodes, 0, &error);
-//    json_t *nodes_j = json_object_get(root, "nodes");
-//    while (!json_is_array(nodes_j)) {
-//        get_node("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", token_str, nodes);
-//        memset(nodes, 0, URL_LENGTH_MAX*sizeof(char));
-//        root = json_loads(nodes, 0, &error);
-//        nodes_j = json_object_get(root, "nodes");
-//    }
-//    node_num = json_array_size(json_object_get(root, "nodes"));
-//    for(size_t i = 0; i < node_num; i++){
-//        json_t *node = json_array_get(json_object_get(root, "nodes"), i);
-//        json_t *protocol = json_object_get(node, "protocol");
-//        const char *protocol_str = json_string_value(protocol);
-//        strcpy(ftsi_list[i].protocol, protocol_str);
-//        strcpy(ftsi_list[i].local_file_path, "tmp/1.mp4");
-//        if (strcmp(protocol_str, "https") == 0 || strcmp(protocol_str, "http") == 0){
-//            json_t *host = json_object_get(node, "host");
-//            const char *host_str = json_string_value(host);
-//            sprintf(ftsi_list[i].remote_file_url, "%s://%s/qq.webrtc.win/%s", protocol_str, host_str, uri);
-//        } else {
-//            json_t *magnet = json_object_get(node, "magnet_uri");
-//            const char *magnet_str = json_string_value(magnet);
-//            sprintf(ftsi_list[i].remote_file_url, "%s\n", magnet_str);
-//        }
-//    }
-//    json_decref(root);
+    ret = get_node(sfinfo->client_ip, sfinfo->host, sfinfo->uri, sfinfo->md5, token_str, nodes);
+    json_decref(root);
+    root = NULL;
+    char nodes_tmp[URL_LENGTH_MAX*10];
+    for(int i = strlen(nodes)-1; i >= 0; i--){
+        if(nodes[i] == '}'){
+            strncpy(nodes_tmp, nodes, i+1);
+            break;
+        }
+    }
+    strcpy(nodes, nodes_tmp);
+    printf("nodes: <<\n%s\n>>\n", nodes);
+    root = json_loads(nodes, 0, &error);
+    if (!root || !ret) {
+        ret = 0;
+        goto error;
+    }
+    json_t *nodes_j = json_object_get(root, "nodes");
+    if (!json_is_array(nodes_j)) {
+        ret = 0;
+        goto error;
+    }
+    node_num = json_array_size(nodes_j);
+    for(size_t i = 0; i < node_num; i++){
+        json_t *node = json_array_get(json_object_get(root, "nodes"), i);
+        json_t *protocol = json_object_get(node, "protocol");
+        const char *protocol_str = json_string_value(protocol);
+        strcpy(ftsi_list[i].protocol, protocol_str);
+        sprintf(ftsi_list[i].local_file_path, ".%s", sfinfo->uri);
+        if (strcmp(protocol_str, "https") == 0 || strcmp(protocol_str, "http") == 0){
+            json_t *host = json_object_get(node, "host");
+            const char *host_str = json_string_value(host);
+            sprintf(ftsi_list[i].remote_file_url, "%s://%s/%s/%s", protocol_str, host_str, sfinfo->host, sfinfo->uri);
+        } else {
+            json_t *magnet = json_object_get(node, "magnet_uri");
+            const char *magnet_str = json_string_value(magnet);
+            sprintf(ftsi_list[i].remote_file_url, "%s", magnet_str);
+        }
+    }
 
-
-
-//    char *pattern = "\"host\": \"(.{28,29})\"";
-
-
-    node_num = 2L;
-    strcpy(ftsi_list[0].protocol, "https");
-    strcpy(ftsi_list[1].protocol, "http");
-    strcpy(ftsi_list[0].remote_file_url, "https://qq.webrtc.win/tv/pear001.mp4");
-    strcpy(ftsi_list[1].remote_file_url, "https://2076933d87ad.webrtc.win:22371/qq.webrtc.win/tv/pear001.mp4");
-    strcpy(ftsi_list[0].local_file_path, "tmp/1.mp4");
-    strcpy(ftsi_list[1].local_file_path, "tmp/1.mp4");
     printf("node num %ld\n", node_num);
-    get_file(ftsi_list, node_num, thread_count, thread_id, stamp, download_file_range);
+    get_file(ftsi_list, node_num, &(sfinfo->thread_count), sfinfo->thread_id, sfinfo->stamp, download_file_range);
     printf("vdn proc done\n");
+
+error:
+    if (root)
+        json_decref(root);
+    return ret;
 }

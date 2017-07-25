@@ -68,6 +68,7 @@ err:
  * if you're literally calling sleep(), or you're calling evhttp_send_reply_chunk() in a loop,
  * you can't do that in an event-based application. You need to schedule a callback to happen
  * later. Nothing works while your function is running, only in between your functions.
+ * https://github.com/libevent/libevent/issues/536
  */
 void do_request_cb(struct evhttp_request *req, void *arg){
     const char *docroot = arg;
@@ -77,6 +78,13 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     char *decoded_path;
 
     struct send_file_ctx *sfinfo = malloc(sizeof(struct send_file_ctx));
+
+    strcpy(sfinfo->username, "admin");
+    strcpy(sfinfo->password, "123456");
+    strcpy(sfinfo->client_ip, "127.0.0.1");
+    strcpy(sfinfo->host, "qq.webrtc.win");
+    strcpy(sfinfo->md5, "ab340d4befcf324a0a1466c166c10d1d");
+    strcpy(sfinfo->uri, uri);
 
     sfinfo->req = req;
     sfinfo->tm_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
@@ -102,7 +110,8 @@ void do_request_cb(struct evhttp_request *req, void *arg){
         goto err;
     sprintf(sfinfo->whole_path, "%s%s", docroot, decoded_path);
 
-    vdn_proc("/tv/pear001.mp4", &(sfinfo->thread_count), sfinfo->thread_id, sfinfo->stamp);
+    if(!vdn_proc(sfinfo))
+        goto err;
 
     const char *type = guess_content_type(decoded_path);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);

@@ -67,13 +67,21 @@ struct file_transfer_session_info {
 };
 
 struct send_file_ctx {
-        struct evhttp_request *req;
-        struct event *tm_ev;
-        char whole_path[URL_LENGTH_MAX];
-        size_t thread_count;
-        size_t completed_count;
-        pthread_t thread_id[THREAD_NUM_MAX];
-        size_t stamp;
+    struct evhttp_request *req;
+    struct event *tm_ev;
+
+    char username[20];
+    char password[20];
+    char client_ip[15];
+    char host[URL_LENGTH_MAX];
+    char uri[50];
+    char md5[50];
+
+    char whole_path[URL_LENGTH_MAX];
+    size_t thread_count;
+    size_t completed_count;
+    pthread_t thread_id[THREAD_NUM_MAX];
+    size_t stamp;
 };
 
 static const long download_file_range = 10000000L;
@@ -142,15 +150,15 @@ void *thread_run(void *ftsi);
 int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num,
              size_t * thread_count, pthread_t * thread_id,
              long stamp, long range);
-/* get_json_cb
- * 从webrtc服务器获取json数据的回调函数
+/* joint_string_cb
+ * 从webrtc服务器获取json数据并拼接到userdata尾部的回调函数
  * buffer: 从服务器读取到的视频文件数据
  * size: *
  * nitems: *
  * userdata: 字符串数组
  * return: 1
 */
-size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata);
+size_t joint_string_cb(char *buffer, size_t size, size_t nitems, void *userdata);
 /* login
  * 登录webrtc服务器获取token
  * username: 用户名
@@ -179,7 +187,7 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
  * stamp: 戳
  * return: 请求是否成功
 */
-int vdn_proc(const char * uri, size_t * thread_count, pthread_t * thread_id, long stamp);
+int vdn_proc(struct send_file_ctx * sfinfo);
 
 
 #endif
