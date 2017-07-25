@@ -9,7 +9,7 @@
 ```
 size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
     strcpy(userdata, buffer);
-    return size*nitems;
+    return 1; ---> return size*nitems;
 }
 ```
 
