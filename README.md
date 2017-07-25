@@ -69,9 +69,12 @@ r=`curl -X GET "https://api.webrtc.win:6601/v1/customer/nodes?client_ip=127.0.0.
 5. 优质节点下载紧急部分，其它部分依次排序
 6. 触发下一个下载周期
    * 剩余播发时间超过阈值
-   * 用户拖动播放条
+   * 用户拖动播放条（支持seek）
    * 定时器
 7. 所有节点的失效的情况，直接回源请求该视频文件或者重新请求节点列表(此情况极端情况下发生)
+8. 支持本地PC 浏览器和ffplay
+9. 移植到Android/Iphone,支持ijkplay播放
+10. 集成WebRTC datachannel通道，需要wulei配合。(janus <--> janus之间的连接)
 
 
 参考Browser流程：
