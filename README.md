@@ -4,6 +4,13 @@
 
 ### Bug fix
 * [evhttp_send_reply_chunk do not send chunk until calling evhttp_send_reply_end](https://github.com/libevent/libevent/issues/536)
+* 不能一次接收所有数据
+```
+size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
+    strcpy(userdata, buffer);
+    return size*nitems;
+}
+```
 
 ## 基于HTTP/HTTPS多源P2P流媒体播放器
 
