@@ -71,24 +71,25 @@ r=`curl -X GET "https://api.webrtc.win:6601/v1/customer/nodes?client_ip=127.0.0.
 }
 ```
 
-### 下载策略(First-Aid算法，@xt补充)
+### 下载策略和流程(First-Aid算法，@xt补充)
 
-1. 获取节点列表，视频文件大小，算出文件固定码率(动态计算需要下载的部分文件)
-2. 根据码率和buffer大小算出窗口大小
-3. 向后台请求http节点和data channel
-4. 节点按照节点质量排序，抛弃不能连通的节点
-5. 优质节点下载紧急部分，其它部分依次排序
-6. 触发下一个下载周期
-   * 剩余播发时间超过阈值
-   * 用户拖动播放条（支持seek）
-   * 定时器
-7. 所有节点的失效的情况，直接回源请求该视频文件或者重新请求节点列表(此情况极端情况下发生)
-8. 支持本地PC 浏览器和ffplay
-9. 移植到Android/Iphone,支持ijkplay播放
-10. 集成WebRTC datachannel通道，需要wulei配合。(janus <--> janus之间的连接)
+* 获取节点列表，视频文件大小，算出文件固定码率(动态计算需要下载的部分文件)
+* 根据码率和buffer大小算出窗口大小
+* 向后台请求http节点和data channel
+* 节点按照节点质量排序，抛弃不能连通的节点
+* 优质节点下载紧急部分，其它部分依次排序
+* 触发下一个下载周期
+    * 剩余播发时间超过阈值
+    * 用户拖动播放条（支持seek）
+    * 定时器
+* 支持节点打分和淘汰机制
+* 所有节点的失效的情况，直接回源请求该视频文件或者重新请求节点列表(此情况极端情况下发生)
+* 支持本地PC 浏览器和ffplay
+* 移植到Android/Iphone,支持ijkplay播放
+* 集成WebRTC datachannel通道，需要wulei配合。(janus <--> janus之间的连接)
 
 
-参考Browser流程：
+参考Browser流程图：
 ![流程](http://git.oschina.net/FogVDN/general-doc/raw/master/%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E5%92%8CVisio%E5%8E%9F%E5%9B%BE/PearPlayer%E6%9E%B6%E6%9E%84%E5%8F%8A%E6%B5%81%E7%A8%8B.png)
 
 
