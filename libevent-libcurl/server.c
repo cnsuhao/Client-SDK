@@ -2,9 +2,7 @@
 
 int main(int argc, char **argv)
 {
-    struct event_base *base;
-    struct evhttp *http;
-    struct evhttp_bound_socket *handle;
+    signal(SIGPIPE, SIG_IGN);
 
     ev_uint16_t port = 60000;
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
@@ -25,7 +23,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    evhttp_set_gencb(http, send_file_cb, argv[1]);
+    evhttp_set_gencb(http, do_request_cb, argv[1]);
 
     handle = evhttp_bind_socket_with_handle(http, "127.0.0.1", port);
     if (!handle) {

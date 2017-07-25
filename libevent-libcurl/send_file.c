@@ -13,23 +13,75 @@ const char * guess_content_type(const char *path) {
     }
 }
 
-void send_file_cb(struct evhttp_request *req, void *arg) {
-    struct evbuffer *evb = NULL;
+void send_file_cb(int fd, short events, void *ctx) {
+    struct send_file_ctx *sfinfo = ctx;
+    int file_descriptor = -1;
+    struct stat st;
+
+    printf("Thread %ld terminated\n", sfinfo->completed_count);
+    pthread_join(sfinfo->thread_id[sfinfo->completed_count], NULL);
+    char file_slice[URL_LENGTH_MAX];
+    memset(file_slice, 0, URL_LENGTH_MAX*sizeof(char));
+    evutil_snprintf(file_slice, URL_LENGTH_MAX, "%s.%ld.slice.%ld", sfinfo->whole_path, sfinfo->stamp, sfinfo->completed_count);
+    printf("file_slice: [%s]\n", file_slice);
+
+
+    if (stat(file_slice, &st)<0) {
+        goto err;
+    }
+    /* This holds the content we're sending. */
+    struct evbuffer *evb = evbuffer_new();
+    if (S_ISDIR(st.st_mode)) {
+        goto err;
+    } else {
+        /* it's a file; add it to the buffer to get sent via sendfile */
+        if ((file_descriptor = open(file_slice, O_RDONLY)) < 0) {
+            perror("open");
+            goto err;
+        }
+        if (fstat(file_descriptor, &st)<0) {
+            perror("fstat");
+            goto err;
+        }
+        evbuffer_add_file(evb, file_descriptor, 0, st.st_size);
+    }
+    evhttp_send_reply_chunk(sfinfo->req, evb);
+    evbuffer_free(evb);
+
+    sfinfo->completed_count++;
+    if (sfinfo->completed_count >= sfinfo->thread_count) {
+        event_free(sfinfo->tm_ev);
+        evhttp_send_reply_end(sfinfo->req);
+        free(sfinfo);
+        return;
+    }
+    event_add(sfinfo->tm_ev, &timeout);
+    return;
+err:
+    evhttp_send_error(sfinfo->req, 404, NULL);
+    if (file_descriptor >= 0)
+        close(file_descriptor);
+}
+
+
+/*
+ * if you're literally calling sleep(), or you're calling evhttp_send_reply_chunk() in a loop,
+ * you can't do that in an event-based application. You need to schedule a callback to happen
+ * later. Nothing works while your function is running, only in between your functions.
+ */
+void do_request_cb(struct evhttp_request *req, void *arg){
     const char *docroot = arg;
     const char *uri = evhttp_request_get_uri(req);
     struct evhttp_uri *decoded = NULL;
     const char *path;
     char *decoded_path;
-    char *whole_path = NULL;
-    size_t len;
-    int fd = -1;
-    struct stat st;
 
-    size_t thread_count;
-    pthread_t thread_id[THREAD_NUM_MAX];
-    time_t rawtime;
+    struct send_file_ctx *sfinfo = malloc(sizeof(struct send_file_ctx));
 
-    time(&rawtime);
+    sfinfo->req = req;
+    sfinfo->tm_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
+    sfinfo->completed_count = 0;
+    sfinfo->stamp = 0;
 
     if (evhttp_request_get_command(req) != EVHTTP_REQ_GET) {
         return;
@@ -48,68 +100,22 @@ void send_file_cb(struct evhttp_request *req, void *arg) {
         goto err;
     if (strstr(decoded_path, ".."))
         goto err;
-    len = strlen(decoded_path)+strlen(docroot)+2;
-    if (!(whole_path = malloc(len))) {
-        perror("malloc");
-        goto err;
-    }
-    evutil_snprintf(whole_path, len, "%s/%s", docroot, decoded_path);
+    sprintf(sfinfo->whole_path, "%s%s", docroot, decoded_path);
 
-    vdn_proc("/tv/pear001.mp4", &thread_count, thread_id, rawtime);
+    vdn_proc("/tv/pear001.mp4", &(sfinfo->thread_count), sfinfo->thread_id, sfinfo->stamp);
 
     const char *type = guess_content_type(decoded_path);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);
     evhttp_send_reply_start(req, HTTP_OK, "OK");
 
-    for(size_t i = 0; i < thread_count; i++) {
-        pthread_join(thread_id[i], NULL);
-        fprintf(stderr, "Thread %ld terminated\n", i);
-        char file_slice[URL_LENGTH_MAX];
-        memset(file_slice, 0, URL_LENGTH_MAX*sizeof(char));
-        evutil_snprintf(file_slice, URL_LENGTH_MAX, "%s.%ld.slice.%ld", whole_path, rawtime, i);
-        printf("file_slice: %s\n", file_slice);
-
-
-        if (stat(file_slice, &st)<0) {
-            goto err;
-        }
-        /* This holds the content we're sending. */
-        evb = evbuffer_new();
-        if (S_ISDIR(st.st_mode)) {
-            goto err;
-        } else {
-            /* it's a file; add it to the buffer to get sent via sendfile */
-            if ((fd = open(file_slice, O_RDONLY)) < 0) {
-                perror("open");
-                goto err;
-            }
-            if (fstat(fd, &st)<0) {
-                perror("fstat");
-                goto err;
-            }
-            evbuffer_add_file(evb, fd, 0, st.st_size);
-        }
-        evhttp_send_reply_chunk(req, evb);
-
-        /* clean the tmp file for caching the video */
-        remove(file_slice);
-    }
-    /* 如果客户端提前终止了请求,会导致连接关闭的回调函数被调用, 但是在这个回调函数里没有调用 evhttp_send_reply_end(), 所以导致了内存泄露. */
-    evhttp_send_reply_end(req);
-
+    event_add(sfinfo->tm_ev, &timeout);
     goto done;
 err:
     evhttp_send_error(req, 404, NULL);
-    if (fd>=0)
-        close(fd);
 done:
     if (decoded)
         evhttp_uri_free(decoded);
     if (decoded_path)
         free(decoded_path);
-    if (whole_path)
-        free(whole_path);
-    if (evb)
-        evbuffer_free(evb);
 }
 

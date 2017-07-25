@@ -66,8 +66,22 @@ struct file_transfer_session_info {
     long pos;
 };
 
-static const long download_file_range = 10000000L;
+struct send_file_ctx {
+        struct evhttp_request *req;
+        struct event *tm_ev;
+        char whole_path[URL_LENGTH_MAX];
+        size_t thread_count;
+        size_t completed_count;
+        pthread_t thread_id[THREAD_NUM_MAX];
+        size_t stamp;
+};
 
+static const long download_file_range = 10000000L;
+static struct timeval timeout = { 1, 0 };
+
+struct event_base *base;
+struct evhttp *http;
+struct evhttp_bound_socket *handle;
 
 /* guess_content_type
  * 猜测请求的文件类型
@@ -76,9 +90,15 @@ static const long download_file_range = 10000000L;
 */
 const char * guess_content_type(const char *path);
 /* send_file_cb
+ * 发送缓存文件的回调函数
+ */
+void send_file_cb(int fd, short events, void *ctx);
+
+/* do_request_cb
  * 响应对本地文件的请求的libevent的回调函数
  */
-void send_file_cb(struct evhttp_request *req, void *arg);
+void do_request_cb(struct evhttp_request *req, void *arg);
+
 
 /* header_cb
  * 从webrtc服务器下载视频文件时从response header中获取content length的回调函数
@@ -116,12 +136,12 @@ void *thread_run(void *ftsi);
  * thread_count: 线程数量的指针
  * thread_id: 线程数组的指针
  * range: 字节长度
- * timestamp: 时间戳
+ * stamp: 时间戳
  * return: 请求是否成功
 */
 int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num,
              size_t * thread_count, pthread_t * thread_id,
-             long timestamp, long range);
+             long stamp, long range);
 /* get_json_cb
  * 从webrtc服务器获取json数据的回调函数
  * buffer: 从服务器读取到的视频文件数据
@@ -156,10 +176,10 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
  * uri: 请求视频文件的uri
  * thread_count: 线程数量的指针
  * thread_id: 线程数组的指针
- * timestamp: 时间戳
+ * stamp: 戳
  * return: 请求是否成功
 */
-int vdn_proc(const char * uri, size_t * thread_count, pthread_t * thread_id, long timestamp);
+int vdn_proc(const char * uri, size_t * thread_count, pthread_t * thread_id, long stamp);
 
 
 #endif

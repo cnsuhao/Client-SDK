@@ -60,14 +60,14 @@ error:
 
 void *thread_run(void *ftsi){
     struct file_transfer_session_info tmp_ftsi = *((struct file_transfer_session_info *)ftsi);
-    printf("thread run:<\n remote: %s\n local: %s\n permit: %s\n pos: %ld\n range: %ld\n fsize: %ld>\n",
-           tmp_ftsi.remote_file_url, tmp_ftsi.local_file_path, tmp_ftsi.permission,
-           tmp_ftsi.pos, tmp_ftsi.range, tmp_ftsi.filesize);
+//    printf("thread run:<\n remote: %s\n local: %s\n permit: %s\n pos: %ld\n range: %ld\n fsize: %ld>\n",
+//           tmp_ftsi.remote_file_url, tmp_ftsi.local_file_path, tmp_ftsi.permission,
+//           tmp_ftsi.pos, tmp_ftsi.range, tmp_ftsi.filesize);
     int ret = get_file_range(&tmp_ftsi);
 }
 
 int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, size_t * thread_count,
-             pthread_t * thread_id, long timestamp, long range){
+             pthread_t * thread_id, long stamp, long range){
     if (node_ftsi == NULL || node_num <= 0 || thread_count == NULL
             || thread_id == NULL || range <= 0L){
         return 0;
@@ -115,11 +115,11 @@ int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, siz
         long index = alive_nodes[t_ct%alive_node_num];
         strcpy(thread_ftsi[t_ct].permission, "w");
         strcpy(thread_ftsi[t_ct].remote_file_url, node_ftsi[index].remote_file_url);
-        sprintf(thread_ftsi[t_ct].local_file_path, "%s.%ld.slice.%ld", local_file_path, timestamp, t_ct);
+        sprintf(thread_ftsi[t_ct].local_file_path, "%s.%ld.slice.%ld", local_file_path, stamp, t_ct);
         thread_ftsi[t_ct].pos = t_ct * range;;
         thread_ftsi[t_ct].range = range;
         thread_ftsi[t_ct].filesize = file_size;
-        pthread_create(&thread_id[t_ct], NULL, thread_run, (void *)&(thread_ftsi[t_ct]));
+//        pthread_create(&thread_id[t_ct], NULL, thread_run, (void *)&(thread_ftsi[t_ct]));
         t_ct++;
     }
     *thread_count = t_ct;
@@ -128,7 +128,7 @@ int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num, siz
 
 size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
     strcpy(userdata, buffer);
-    return 1;
+    return size * nitems;
 }
 
 int login(const char * username, const char * password, char * token){
@@ -202,7 +202,7 @@ error:
     return ret;
 }
 
-int vdn_proc(const char * uri, size_t *thread_count, pthread_t *thread_id, long timestamp){
+int vdn_proc(const char * uri, size_t *thread_count, pthread_t *thread_id, long stamp){
     char token[URL_LENGTH_MAX*10];
     char nodes[URL_LENGTH_MAX*20];
     struct file_transfer_session_info ftsi_list[NODE_NUM_MAX];
@@ -226,7 +226,7 @@ int vdn_proc(const char * uri, size_t *thread_count, pthread_t *thread_id, long 
     const char *token_str = json_string_value(token_j);
 
     get_node("127.0.0.1", "qq.webrtc.win", uri, "ab340d4befcf324a0a1466c166c10d1d", token_str, nodes);
-    printf("node: <%s>\n", nodes);
+//    printf("node: <%s>\n", nodes);
     /* use json to get node */
 //    root = json_loads(nodes, 0, &error);
 //    json_t *nodes_j = json_object_get(root, "nodes");
@@ -268,6 +268,6 @@ int vdn_proc(const char * uri, size_t *thread_count, pthread_t *thread_id, long 
     strcpy(ftsi_list[0].local_file_path, "tmp/1.mp4");
     strcpy(ftsi_list[1].local_file_path, "tmp/1.mp4");
     printf("node num %ld\n", node_num);
-    get_file(ftsi_list, node_num, thread_count, thread_id, timestamp, download_file_range);
+    get_file(ftsi_list, node_num, thread_count, thread_id, stamp, download_file_range);
     printf("vdn proc done\n");
 }
