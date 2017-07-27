@@ -15,36 +15,14 @@ const char * guess_content_type(const char *path) {
 
 void send_file_cb(int fd, short events, void *ctx) {
     struct send_file_ctx *sfinfo = ctx;
-    int file_descriptor = -1;
-    struct stat st;
 
     printf("Thread %ld terminated\n", sfinfo->completed_count);
     pthread_join(sfinfo->thread_id[sfinfo->completed_count], NULL);
-    char file_slice[URL_LENGTH_MAX];
-    memset(file_slice, 0, URL_LENGTH_MAX*sizeof(char));
-    evutil_snprintf(file_slice, URL_LENGTH_MAX, "%s.%ld.slice.%ld", sfinfo->whole_path, sfinfo->stamp, sfinfo->completed_count);
-    printf("file_slice: [%s]\n", file_slice);
 
-
-    if (stat(file_slice, &st)<0) {
-        goto err;
-    }
     /* This holds the content we're sending. */
-    struct evbuffer *evb = evbuffer_new();
-    if (S_ISDIR(st.st_mode)) {
-        goto err;
-    } else {
-        /* it's a file; add it to the buffer to get sent via sendfile */
-        if ((file_descriptor = open(file_slice, O_RDONLY)) < 0) {
-            perror("open");
-            goto err;
-        }
-        if (fstat(file_descriptor, &st)<0) {
-            perror("fstat");
-            goto err;
-        }
-        evbuffer_add_file(evb, file_descriptor, 0, st.st_size);
-    }
+    struct evbuffer *evb = sfinfo->evb_array[sfinfo->completed_count];
+    printf("evbuffer len: %ld\n", evbuffer_get_length(evb));
+
     evhttp_send_reply_chunk(sfinfo->req, evb);
     evbuffer_free(evb);
 
@@ -59,8 +37,6 @@ void send_file_cb(int fd, short events, void *ctx) {
     return;
 err:
     evhttp_send_error(sfinfo->req, 404, NULL);
-    if (file_descriptor >= 0)
-        close(file_descriptor);
 }
 
 
@@ -89,7 +65,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     sfinfo->req = req;
     sfinfo->tm_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
     sfinfo->completed_count = 0;
-    sfinfo->stamp = 0;
+    sfinfo->window_size = 10000000L;
 
     if (evhttp_request_get_command(req) != EVHTTP_REQ_GET) {
         return;

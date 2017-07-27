@@ -56,14 +56,19 @@ static const struct table_entry {
 { NULL, NULL },
 };
 
-struct file_transfer_session_info {
+struct node_info {
     char protocol[10];
     char remote_file_url[URL_LENGTH_MAX];
-    char local_file_path[URL_LENGTH_MAX];
-    long range;
-    char permission[5];
-    long filesize;
     long pos;
+    long range;
+    long filesize;
+
+};
+
+struct file_transfer_session_info {
+    struct node_info ni;
+
+    struct evbuffer *evb;
 };
 
 struct send_file_ctx {
@@ -81,10 +86,12 @@ struct send_file_ctx {
     size_t thread_count;
     size_t completed_count;
     pthread_t thread_id[THREAD_NUM_MAX];
-    size_t stamp;
+
+    struct evbuffer * evb_array[THREAD_NUM_MAX];
+
+    long window_size;
 };
 
-static const long download_file_range = 10000000L;
 static struct timeval timeout = { 1, 0 };
 
 struct event_base *base;
@@ -147,9 +154,8 @@ void *thread_run(void *ftsi);
  * stamp: 时间戳
  * return: 请求是否成功
 */
-int get_file(struct file_transfer_session_info * node_ftsi, size_t node_num,
-             size_t * thread_count, pthread_t * thread_id,
-             long stamp, long range);
+int get_file(struct node_info * ni_list, size_t node_num,
+             struct send_file_ctx * sfinfo);
 /* joint_string_cb
  * 从webrtc服务器获取json数据并拼接到userdata尾部的回调函数
  * buffer: 从服务器读取到的视频文件数据
