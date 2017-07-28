@@ -67,7 +67,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     sfinfo->req = req;
     sfinfo->tm_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
     sfinfo->alive_node_num = 0L;
-    memset(sfinfo->alive_nodes_index, 0, sizeof(sfinfo->alive_nodes_index));
+    memset(sfinfo->alive_nodes, 0, sizeof(sfinfo->alive_nodes));
     sfinfo->completed_count = 0;
     sfinfo->window_size = 5000000L;
     sfinfo->chunk_size = 1000000L;
@@ -97,7 +97,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     if(!preparation_process(sfinfo, ni_list))
         goto err;
 
-    if(!get_file(sfinfo, ni_list)) {
+    if(!get_file(sfinfo)) {
         printf("getfile wrong\n");
         goto err;
     }

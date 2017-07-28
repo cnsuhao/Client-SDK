@@ -22,8 +22,8 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
     CURL *curlhandle = NULL;
     char range_str[URL_LENGTH_MAX];
 
-    if ( strlen(ftsi->ni.remote_file_url) <= 0 || ftsi->ni.pos < 0
-         || ftsi->ni.range < 0){
+    if ( strlen(ftsi->ni.remote_file_url) <= 0 || ftsi->pos < 0
+         || ftsi->range < 0){
         printf("get_file_range wrong\n");
         ret = 0;
         goto error;
@@ -36,14 +36,14 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
     }
     curl_easy_setopt(curlhandle, CURLOPT_URL, ftsi->ni.remote_file_url);
     curl_easy_setopt(curlhandle, CURLOPT_HEADERFUNCTION, header_cb);
-    curl_easy_setopt(curlhandle, CURLOPT_HEADERDATA, &(ftsi->ni.filesize));
+    curl_easy_setopt(curlhandle, CURLOPT_HEADERDATA, &(ftsi->filesize));
     curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, ftsi->evb);
     curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, write_buffer_cb);
 
-    if ( ftsi->ni.filesize >= ftsi->ni.pos + ftsi->ni.range - 1 ){
-        sprintf(range_str, "%ld-%ld", ftsi->ni.pos, ftsi->ni.pos + ftsi->ni.range - 1);
+    if ( ftsi->filesize >= ftsi->pos + ftsi->range - 1 ){
+        sprintf(range_str, "%ld-%ld", ftsi->pos, ftsi->pos + ftsi->range - 1);
     } else {
-        sprintf(range_str, "%ld-", ftsi->ni.pos);
+        sprintf(range_str, "%ld-", ftsi->pos);
     }
     curl_easy_setopt(curlhandle, CURLOPT_RANGE, range_str);
     CURLcode r = curl_easy_perform(curlhandle);
@@ -62,12 +62,12 @@ void *thread_run(void *ftsi){
     int ret = get_file_range(&tmp_ftsi);
 }
 
-int get_file(struct send_file_ctx *sfinfo, struct node_info *ni_list){
+int get_file(struct send_file_ctx *sfinfo){
     struct file_transfer_session_info thread_ftsi[THREAD_NUM_MAX];
     memset(thread_ftsi, 0, sizeof(thread_ftsi));
 
     size_t alive_node_num = sfinfo->alive_node_num;
-    size_t file_size = ni_list[sfinfo->alive_nodes_index[0]].filesize;
+    size_t file_size = sfinfo->filesize;
     size_t t_ct = 0;
     while (file_size > t_ct*sfinfo->window_size){
         sfinfo->evb_array[t_ct] = evbuffer_new();
@@ -79,11 +79,10 @@ int get_file(struct send_file_ctx *sfinfo, struct node_info *ni_list){
     printf("thread count: %ld\n", sfinfo->thread_count);
 
     for (int i = 0; i < sfinfo->thread_count; i++) {
-        int index = sfinfo->alive_nodes_index[i%alive_node_num];
-        memcpy(&(thread_ftsi[i].ni), &(ni_list[index]), sizeof(struct node_info));
-        thread_ftsi[i].ni.pos = i * sfinfo->window_size;;
-        thread_ftsi[i].ni.range = sfinfo->window_size;
-        thread_ftsi[i].ni.filesize = file_size;
+        memcpy(&(thread_ftsi[i].ni), &(sfinfo->alive_nodes[i%alive_node_num]), sizeof(struct node_info));
+        thread_ftsi[i].pos = i * sfinfo->window_size;;
+        thread_ftsi[i].range = sfinfo->window_size;
+        thread_ftsi[i].filesize = file_size;
         thread_ftsi[i].evb = sfinfo->evb_array[i];
         pthread_create(&(sfinfo->thread_id[i]), NULL, thread_run, (void *)&(thread_ftsi[i]));
     }
@@ -179,7 +178,7 @@ error:
     return ret;
 }
 
-int get_node_alive(struct node_info * ni_list, size_t node_num, int * alive_nodes_index){
+int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info * alive_nodes, size_t * file_size){
     if (ni_list == NULL || node_num <= 0){
         printf("get_node_alive wrong\n");
         return 0;
@@ -189,18 +188,18 @@ int get_node_alive(struct node_info * ni_list, size_t node_num, int * alive_node
     /* find which node can be used for transmission */
     for(int i = 0; i < node_num; i++){
         if (strcmp(ni_list[i].protocol, "https") == 0 || strcmp(ni_list[i].protocol, "http") == 0){
-            ni_list[i].pos = 0L;
-            ni_list[i].range = 1L;
             struct file_transfer_session_info tmp;
             memcpy(&(tmp.ni), &(ni_list[i]), sizeof(struct node_info));
+            tmp.pos = 0L;
+            tmp.range = 1L;
             tmp.evb = evbuffer_new();
             get_file_range(&tmp);
             evbuffer_free(tmp.evb);
-            if ( tmp.ni.filesize != 0L ) {
+            if ( tmp.filesize != 0L ) {
                 printf("node alive: %s\n", tmp.ni.remote_file_url);
-                alive_nodes_index[alive_node_num] = i;
+                *file_size = tmp.filesize;
+                memcpy(&(alive_nodes[alive_node_num]), &(ni_list[i]), sizeof(struct node_info));
                 alive_node_num++;
-                ni_list[i].filesize = tmp.ni.filesize;
             }
         } else {
             /* magnet or other protocol added here */
@@ -275,7 +274,7 @@ int preparation_process(struct send_file_ctx *sfinfo, struct node_info * ni_list
         }
     }
 
-    sfinfo->alive_node_num = get_node_alive(ni_list, node_num, sfinfo->alive_nodes_index);
+    sfinfo->alive_node_num = get_node_alive(ni_list, node_num, sfinfo->alive_nodes, &(sfinfo->filesize));
 
     if (sfinfo->alive_node_num <= 0) {
         ret = 0;

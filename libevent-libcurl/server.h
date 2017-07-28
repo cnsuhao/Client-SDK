@@ -59,14 +59,16 @@ static const struct table_entry {
 struct node_info {
     char protocol[10];
     char remote_file_url[URL_LENGTH_MAX];
-    long pos;
-    long range;
-    long filesize;
+    char type[10];
 
 };
 
 struct file_transfer_session_info {
     struct node_info ni;
+
+    long pos;
+    long range;
+    size_t filesize;
 
     struct evbuffer *evb;
 };
@@ -84,7 +86,7 @@ struct send_file_ctx {
 
     char whole_path[URL_LENGTH_MAX];
     size_t alive_node_num;
-    int alive_nodes_index[NODE_NUM_MAX];
+    struct node_info alive_nodes[NODE_NUM_MAX];
 
     size_t thread_count;
     size_t completed_count;
@@ -92,8 +94,9 @@ struct send_file_ctx {
 
     struct evbuffer * evb_array[THREAD_NUM_MAX];
 
-    long window_size;
-    long chunk_size;
+    size_t filesize;
+    size_t window_size;
+    size_t chunk_size;
 };
 
 static struct timeval timeout = { 1, 0 };
@@ -154,7 +157,7 @@ void *thread_run(void *ftsi);
  * ni_list: 节点信息
  * return: 请求是否成功
 */
-int get_file(struct send_file_ctx * sfinfo, struct node_info * ni_list);
+int get_file(struct send_file_ctx * sfinfo);
 /* joint_string_cb
  * 从webrtc服务器获取json数据并拼接到userdata尾部的回调函数
  * buffer: 从服务器读取到的视频文件数据
@@ -192,7 +195,7 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
  * alive_node_num: 活着的节点数量的指针
  * return: 活着的节点数目
 */
-int get_node_alive(struct node_info * ni_list, size_t node_num, int *alive_nodes_index);
+int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info *alive_nodes, size_t *file_size);
 
 /* preparation_process
  * 从webrtc服务器请求视频文件的准备工作，比如登录，获取节点以及检测可用节点
