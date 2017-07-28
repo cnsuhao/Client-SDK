@@ -83,6 +83,9 @@ struct send_file_ctx {
     char md5[50];
 
     char whole_path[URL_LENGTH_MAX];
+    size_t alive_node_num;
+    int alive_nodes_index[NODE_NUM_MAX];
+
     size_t thread_count;
     size_t completed_count;
     pthread_t thread_id[THREAD_NUM_MAX];
@@ -90,6 +93,7 @@ struct send_file_ctx {
     struct evbuffer * evb_array[THREAD_NUM_MAX];
 
     long window_size;
+    long chunk_size;
 };
 
 static struct timeval timeout = { 1, 0 };
@@ -124,15 +128,15 @@ void do_request_cb(struct evhttp_request *req, void *arg);
  * return: size * nitems
 */
 size_t header_cb(char *buffer, size_t size, size_t nitems, void *userdata);
-/* write_file_cb
- * 从webrtc服务器下载视频文件时写入本地文件的回调函数
+/* write_buffer_cb
+ * 从webrtc服务器下载视频文件时写入内存的回调函数
  * buffer: 从服务器读取到的视频文件数据
  * size: *
  * nitems: *
- * userdata: 文件指针
+ * userdata: evbuffer指针
  * return: 是否写成功
 */
-size_t write_file_cb(char *buffer, size_t size, size_t nitems, void *userdata);
+size_t write_buffer_cb(char *buffer, size_t size, size_t nitems, void *userdata);
 /* get_file_range
  * 从webrtc服务器请求视频文件中部分数据的函数
  * ftsi: 文件传输会话的具体信息
@@ -146,16 +150,11 @@ int get_file_range(struct file_transfer_session_info * ftsi);
 void *thread_run(void *ftsi);
 /* get_file
  * 从webrtc服务器请求整个视频文件的函数
- * ftsi_list: 不同节点的文件传输会话的具体信息
- * node_num: 节点数量
- * thread_count: 线程数量的指针
- * thread_id: 线程数组的指针
- * range: 字节长度
- * stamp: 时间戳
+ * sfinfo: 本次发送的Context
+ * ni_list: 节点信息
  * return: 请求是否成功
 */
-int get_file(struct node_info * ni_list, size_t node_num,
-             struct send_file_ctx * sfinfo);
+int get_file(struct send_file_ctx * sfinfo, struct node_info * ni_list);
 /* joint_string_cb
  * 从webrtc服务器获取json数据并拼接到userdata尾部的回调函数
  * buffer: 从服务器读取到的视频文件数据
@@ -185,15 +184,23 @@ int login(const char * username, const char * password, char * token);
 */
 int get_node(char * client_ip, char * host, const char * uri, char * md5, const char * token, char * nodes);
 
-/* vdn_proc
- * 从webrtc服务器请求视频文件的主函数
- * uri: 请求视频文件的uri
- * thread_count: 线程数量的指针
- * thread_id: 线程数组的指针
- * stamp: 戳
+/* get_node_alive
+ * 获取多个节点中活着的节点
+ * sfinfo: 本次发送的Context
+ * ni_list: 节点信息
+ * node_num: 节点数量
+ * alive_node_num: 活着的节点数量的指针
+ * return: 活着的节点数目
+*/
+int get_node_alive(struct node_info * ni_list, size_t node_num, int *alive_nodes_index);
+
+/* preparation_process
+ * 从webrtc服务器请求视频文件的准备工作，比如登录，获取节点以及检测可用节点
+ * sfinfo: 本次发送的Context
+ * ni_list: 节点信息
  * return: 请求是否成功
 */
-int vdn_proc(struct send_file_ctx * sfinfo);
+int preparation_process(struct send_file_ctx * sfinfo, struct node_info * ni_list);
 
 
 #endif

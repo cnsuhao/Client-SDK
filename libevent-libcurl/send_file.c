@@ -21,9 +21,8 @@ void send_file_cb(int fd, short events, void *ctx) {
 
     /* This holds the content we're sending. */
     struct evbuffer *evb = sfinfo->evb_array[sfinfo->completed_count];
-    printf("evbuffer len: %ld\n", evbuffer_get_length(evb));
-
     evhttp_send_reply_chunk(sfinfo->req, evb);
+    printf("evbuffer len: %ld\n", evbuffer_get_length(evb));
     evbuffer_free(evb);
 
     sfinfo->completed_count++;
@@ -54,6 +53,9 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     char *decoded_path;
 
     struct send_file_ctx *sfinfo = malloc(sizeof(struct send_file_ctx));
+    struct node_info ni_list[NODE_NUM_MAX];
+
+    memset(ni_list, 0, sizeof(ni_list));
 
     strcpy(sfinfo->username, "admin");
     strcpy(sfinfo->password, "123456");
@@ -64,8 +66,14 @@ void do_request_cb(struct evhttp_request *req, void *arg){
 
     sfinfo->req = req;
     sfinfo->tm_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
+    sfinfo->alive_node_num = 0L;
+    memset(sfinfo->alive_nodes_index, 0, sizeof(sfinfo->alive_nodes_index));
     sfinfo->completed_count = 0;
-    sfinfo->window_size = 10000000L;
+    sfinfo->window_size = 5000000L;
+    sfinfo->chunk_size = 1000000L;
+
+    /* Must initialize libcurl before any threads are started */
+    curl_global_init(CURL_GLOBAL_ALL);
 
     if (evhttp_request_get_command(req) != EVHTTP_REQ_GET) {
         return;
@@ -86,8 +94,13 @@ void do_request_cb(struct evhttp_request *req, void *arg){
         goto err;
     sprintf(sfinfo->whole_path, "%s%s", docroot, decoded_path);
 
-    if(!vdn_proc(sfinfo))
+    if(!preparation_process(sfinfo, ni_list))
         goto err;
+
+    if(!get_file(sfinfo, ni_list)) {
+        printf("getfile wrong\n");
+        goto err;
+    }
 
     const char *type = guess_content_type(decoded_path);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);

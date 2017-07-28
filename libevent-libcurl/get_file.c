@@ -8,7 +8,7 @@ size_t header_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
     return size * nitems;
 }
 
-size_t write_file_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
+size_t write_buffer_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
     struct evbuffer * evb = (struct evbuffer * )userdata;
     int ret = evbuffer_add(evb, buffer, size * nitems);
     if(!ret)
@@ -38,14 +38,13 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
     curl_easy_setopt(curlhandle, CURLOPT_HEADERFUNCTION, header_cb);
     curl_easy_setopt(curlhandle, CURLOPT_HEADERDATA, &(ftsi->ni.filesize));
     curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, ftsi->evb);
-    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, write_file_cb);
+    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, write_buffer_cb);
 
     if ( ftsi->ni.filesize >= ftsi->ni.pos + ftsi->ni.range - 1 ){
         sprintf(range_str, "%ld-%ld", ftsi->ni.pos, ftsi->ni.pos + ftsi->ni.range - 1);
     } else {
         sprintf(range_str, "%ld-", ftsi->ni.pos);
     }
-    printf("range_str: %s\n", range_str);
     curl_easy_setopt(curlhandle, CURLOPT_RANGE, range_str);
     CURLcode r = curl_easy_perform(curlhandle);
     if (r != CURLE_OK){
@@ -63,52 +62,24 @@ void *thread_run(void *ftsi){
     int ret = get_file_range(&tmp_ftsi);
 }
 
-int get_file(struct node_info *ni_list, size_t node_num, struct send_file_ctx *sfinfo){
-    if (ni_list == NULL || node_num <= 0 || sfinfo == NULL
-            || sfinfo->thread_id == NULL || sfinfo->window_size <= 0L){
-        return 0;
-    }
-    long alive_nodes[NODE_NUM_MAX];
-    size_t alive_node_num = 0L;
-    long file_size = 0L;
+int get_file(struct send_file_ctx *sfinfo, struct node_info *ni_list){
     struct file_transfer_session_info thread_ftsi[THREAD_NUM_MAX];
     memset(thread_ftsi, 0, sizeof(thread_ftsi));
-    memset(alive_nodes, 0, sizeof(alive_nodes));
 
-    /* find which node can be used for transmission */
-    for(size_t i = 0; i < node_num; i++){
-        if (strcmp(ni_list[i].protocol, "https") == 0 || strcmp(ni_list[i].protocol, "http") == 0){
-            ni_list[i].pos = 0L;
-            ni_list[i].range = 1L;
-            struct file_transfer_session_info tmp;
-            memcpy(&(tmp.ni), &(ni_list[i]), sizeof(struct node_info));
-            tmp.evb = evbuffer_new();
-            get_file_range(&tmp);
-            evbuffer_free(tmp.evb);
-            if ( tmp.ni.filesize != 0L ) {
-                printf("node alive: %s\n", tmp.ni.remote_file_url);
-                alive_nodes[alive_node_num] = i;
-                alive_node_num++;
-                file_size = tmp.ni.filesize;
-            }
-        } else {
-            /* magnet or other protocol added here */
-
-        }
-    }
-
-    if (alive_node_num <= 0)
-        return 0;
-
+    size_t alive_node_num = sfinfo->alive_node_num;
+    size_t file_size = ni_list[sfinfo->alive_nodes_index[0]].filesize;
     size_t t_ct = 0;
     while (file_size > t_ct*sfinfo->window_size){
         sfinfo->evb_array[t_ct] = evbuffer_new();
         t_ct++;
     }
     sfinfo->thread_count = t_ct;
+    printf("alive num: %ld\n", alive_node_num);
+    printf("file size: %ld\n", file_size);
+    printf("thread count: %ld\n", sfinfo->thread_count);
 
-    for (size_t i = 0; i < sfinfo->thread_count; i++) {
-        long index = alive_nodes[i%alive_node_num];
+    for (int i = 0; i < sfinfo->thread_count; i++) {
+        int index = sfinfo->alive_nodes_index[i%alive_node_num];
         memcpy(&(thread_ftsi[i].ni), &(ni_list[index]), sizeof(struct node_info));
         thread_ftsi[i].ni.pos = i * sfinfo->window_size;;
         thread_ftsi[i].ni.range = sfinfo->window_size;
@@ -208,28 +179,57 @@ error:
     return ret;
 }
 
-int vdn_proc(struct send_file_ctx *sfinfo){
+int get_node_alive(struct node_info * ni_list, size_t node_num, int * alive_nodes_index){
+    if (ni_list == NULL || node_num <= 0){
+        printf("get_node_alive wrong\n");
+        return 0;
+    }
+    size_t alive_node_num = 0L;
+
+    /* find which node can be used for transmission */
+    for(int i = 0; i < node_num; i++){
+        if (strcmp(ni_list[i].protocol, "https") == 0 || strcmp(ni_list[i].protocol, "http") == 0){
+            ni_list[i].pos = 0L;
+            ni_list[i].range = 1L;
+            struct file_transfer_session_info tmp;
+            memcpy(&(tmp.ni), &(ni_list[i]), sizeof(struct node_info));
+            tmp.evb = evbuffer_new();
+            get_file_range(&tmp);
+            evbuffer_free(tmp.evb);
+            if ( tmp.ni.filesize != 0L ) {
+                printf("node alive: %s\n", tmp.ni.remote_file_url);
+                alive_nodes_index[alive_node_num] = i;
+                alive_node_num++;
+                ni_list[i].filesize = tmp.ni.filesize;
+            }
+        } else {
+            /* magnet or other protocol added here */
+
+        }
+    }
+
+    return alive_node_num;
+
+}
+
+
+int preparation_process(struct send_file_ctx *sfinfo, struct node_info * ni_list){
     int ret = 1;
 
     char token[URL_LENGTH_MAX];
     char nodes[URL_LENGTH_MAX*10];
-    struct node_info ni_list[NODE_NUM_MAX];
     json_error_t error;
     json_t *root = NULL;
     size_t node_num = 0L;
 
     memset(token, 0, sizeof(token));
     memset(nodes, 0, sizeof(nodes));
-    memset(ni_list, 0, sizeof(ni_list));
-
-    /* Must initialize libcurl before any threads are started */
-    curl_global_init(CURL_GLOBAL_ALL);
 
     ret = login(sfinfo->username, sfinfo->password, token);
     root = json_loads(token, 0, &error);
     if (!root || !ret) {
         ret = 0;
-        printf("vdn_proc login wrong\n");
+        printf("preparation_process login wrong\n");
         goto error;
     }
     json_t *token_j = json_object_get(root, "token");
@@ -249,17 +249,17 @@ int vdn_proc(struct send_file_ctx *sfinfo){
     root = json_loads(nodes, 0, &error);
     if (!root || !ret) {
         ret = 0;
-        printf("vdn_proc nodes wrong\n");
+        printf("preparation_process nodes wrong\n");
         goto error;
     }
     json_t *nodes_j = json_object_get(root, "nodes");
     if (!json_is_array(nodes_j)) {
         ret = 0;
-        printf("vdn_proc node_array wrong\n");
+        printf("preparation_process node_array wrong\n");
         goto error;
     }
     node_num = json_array_size(nodes_j);
-    for(size_t i = 0; i < node_num; i++){
+    for(int i = 0; i < node_num; i++){
         json_t *node = json_array_get(json_object_get(root, "nodes"), i);
         json_t *protocol = json_object_get(node, "protocol");
         const char *protocol_str = json_string_value(protocol);
@@ -267,7 +267,7 @@ int vdn_proc(struct send_file_ctx *sfinfo){
         if (strcmp(protocol_str, "https") == 0 || strcmp(protocol_str, "http") == 0){
             json_t *host = json_object_get(node, "host");
             const char *host_str = json_string_value(host);
-            sprintf(ni_list[i].remote_file_url, "%s://%s/%s/%s", protocol_str, host_str, sfinfo->host, sfinfo->uri);
+            sprintf(ni_list[i].remote_file_url, "%s://%s/%s%s", protocol_str, host_str, sfinfo->host, sfinfo->uri);
         } else {
             json_t *magnet = json_object_get(node, "magnet_uri");
             const char *magnet_str = json_string_value(magnet);
@@ -275,13 +275,16 @@ int vdn_proc(struct send_file_ctx *sfinfo){
         }
     }
 
-    printf("node num %ld\n", node_num);
-    if(!get_file(ni_list, node_num, sfinfo)) {
+    sfinfo->alive_node_num = get_node_alive(ni_list, node_num, sfinfo->alive_nodes_index);
+
+    if (sfinfo->alive_node_num <= 0) {
         ret = 0;
-        printf("vdn_proc getfile wrong\n");
+        printf("preparation_process alive_node_num wrong\n");
         goto error;
     }
-    printf("vdn proc done\n");
+
+    printf("node num %ld\n", node_num);
+    printf("preparation_process done\n");
 
 error:
     if (root)
