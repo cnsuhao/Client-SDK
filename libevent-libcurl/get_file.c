@@ -24,13 +24,13 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
 
     if ( strlen(ftsi->ni.remote_file_url) <= 0 || ftsi->pos < 0
          || ftsi->range < 0){
-        printf("get_file_range wrong\n");
+        printf("get_file_range param wrong\n");
         ret = 0;
         goto error;
     }
     curlhandle = curl_easy_init();
     if (curlhandle == NULL){
-        printf("get_file_range wrong\n");
+        printf("get_file_range curl wrong\n");
         ret = 0;
         goto error;
     }
@@ -48,7 +48,7 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
     curl_easy_setopt(curlhandle, CURLOPT_RANGE, range_str);
     CURLcode r = curl_easy_perform(curlhandle);
     if (r != CURLE_OK){
-        printf("get_file_range wrong\n");
+        printf("get_file_range perform wrong\n");
         ret = 0;
     }
 error:
@@ -62,27 +62,18 @@ void *thread_run(void *ftsi){
     int ret = get_file_range(&tmp_ftsi);
 }
 
-int get_file(struct send_file_ctx *sfinfo){
+int window_download(struct send_file_ctx *sfinfo){
     struct file_transfer_session_info thread_ftsi[THREAD_NUM_MAX];
     memset(thread_ftsi, 0, sizeof(thread_ftsi));
 
     size_t alive_node_num = sfinfo->alive_node_num;
-    size_t file_size = sfinfo->filesize;
-    size_t t_ct = 0;
-    while (file_size > t_ct*sfinfo->window_size){
-        sfinfo->evb_array[t_ct] = evbuffer_new();
-        t_ct++;
-    }
-    sfinfo->thread_count = t_ct;
-    printf("alive num: %ld\n", alive_node_num);
-    printf("file size: %ld\n", file_size);
-    printf("thread count: %ld\n", sfinfo->thread_count);
+    sfinfo->thread_pointer = 0;
 
-    for (int i = 0; i < sfinfo->thread_count; i++) {
+    for (int i = 0; i < sfinfo->chk_in_win_ct; i++) {
         memcpy(&(thread_ftsi[i].ni), &(sfinfo->alive_nodes[i%alive_node_num]), sizeof(struct node_info));
-        thread_ftsi[i].pos = i * sfinfo->window_size;;
-        thread_ftsi[i].range = sfinfo->window_size;
-        thread_ftsi[i].filesize = file_size;
+        thread_ftsi[i].pos = (sfinfo->sent_chunk_pointer + i) * sfinfo->chunk_size;
+        thread_ftsi[i].range = sfinfo->chunk_size;
+        thread_ftsi[i].filesize = sfinfo->filesize;
         thread_ftsi[i].evb = sfinfo->evb_array[i];
         pthread_create(&(sfinfo->thread_id[i]), NULL, thread_run, (void *)&(thread_ftsi[i]));
     }
@@ -92,9 +83,6 @@ int get_file(struct send_file_ctx *sfinfo){
 
 /* return value must be size of data which has been process */
 size_t joint_string_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
-//    printf("buffer len: <<%ld>>\n", strlen(buffer));
-//    printf("userdata len: <<%ld>>\n", strlen((char *)userdata));
-//    printf("buffer: <<\n%s\n>>\n", buffer);
     strcat(userdata, buffer);
     return size * nitems;
 }
@@ -193,14 +181,15 @@ int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info
             tmp.pos = 0L;
             tmp.range = 1L;
             tmp.evb = evbuffer_new();
-            get_file_range(&tmp);
-            evbuffer_free(tmp.evb);
-            if ( tmp.filesize != 0L ) {
+            if ( get_file_range(&tmp) ) {
                 printf("node alive: %s\n", tmp.ni.remote_file_url);
                 *file_size = tmp.filesize;
                 memcpy(&(alive_nodes[alive_node_num]), &(ni_list[i]), sizeof(struct node_info));
                 alive_node_num++;
+            }else{
+                printf("node dead: %s\n", tmp.ni.remote_file_url);
             }
+            evbuffer_free(tmp.evb);
         } else {
             /* magnet or other protocol added here */
 
@@ -211,15 +200,19 @@ int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info
 
 }
 
-
 int preparation_process(struct send_file_ctx *sfinfo, struct node_info * ni_list){
     int ret = 1;
-
     char token[URL_LENGTH_MAX];
     char nodes[URL_LENGTH_MAX*10];
     json_error_t error;
     json_t *root = NULL;
     size_t node_num = 0L;
+
+    if(sfinfo->window_size <= 0 || sfinfo->chunk_size <= 0 || sfinfo->window_size % sfinfo->chunk_size != 0){
+        printf("preparation_process param wrong\n");
+        ret = 0;
+        goto error;
+    }
 
     memset(token, 0, sizeof(token));
     memset(nodes, 0, sizeof(nodes));
@@ -275,14 +268,19 @@ int preparation_process(struct send_file_ctx *sfinfo, struct node_info * ni_list
     }
 
     sfinfo->alive_node_num = get_node_alive(ni_list, node_num, sfinfo->alive_nodes, &(sfinfo->filesize));
-
-    if (sfinfo->alive_node_num <= 0) {
+    if (sfinfo->alive_node_num <= 0 || sfinfo->filesize <= 0) {
         ret = 0;
         printf("preparation_process alive_node_num wrong\n");
         goto error;
     }
 
-    printf("node num %ld\n", node_num);
+    sfinfo->chk_in_win_ct = sfinfo->window_size / sfinfo->chunk_size;
+    for (int i = 0; i < sfinfo->chk_in_win_ct; i++)
+        sfinfo->evb_array[i] = evbuffer_new();
+    sfinfo->chunk_num = sfinfo->filesize / sfinfo->chunk_size + 1;
+
+
+    printf("node num %ld    alive num: %ld\n", node_num, sfinfo->alive_node_num);
     printf("preparation_process done\n");
 
 error:

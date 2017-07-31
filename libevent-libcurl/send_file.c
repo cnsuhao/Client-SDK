@@ -16,26 +16,45 @@ const char * guess_content_type(const char *path) {
 void send_file_cb(int fd, short events, void *ctx) {
     struct send_file_ctx *sfinfo = ctx;
 
-    printf("Thread %ld terminated\n", sfinfo->completed_count);
-    pthread_join(sfinfo->thread_id[sfinfo->completed_count], NULL);
+    if (sfinfo->sent_chunk_pointer <= 0){
+        if(!window_download(sfinfo)) {
+            printf("getfile wrong\n");
+            goto err;
+        }
+    }
 
-    /* This holds the content we're sending. */
-    struct evbuffer *evb = sfinfo->evb_array[sfinfo->completed_count];
+    int t_ptr = sfinfo->thread_pointer;
+    pthread_join(sfinfo->thread_id[t_ptr], NULL);
+    struct evbuffer *evb = sfinfo->evb_array[t_ptr];
+    printf("sent_chunk: %d  evbuffer len: %ld\n", sfinfo->sent_chunk_pointer, evbuffer_get_length(evb));
     evhttp_send_reply_chunk(sfinfo->req, evb);
-    printf("evbuffer len: %ld\n", evbuffer_get_length(evb));
-    evbuffer_free(evb);
+    sfinfo->sent_chunk_pointer++;
+    sfinfo->thread_pointer++;
 
-    sfinfo->completed_count++;
-    if (sfinfo->completed_count >= sfinfo->thread_count) {
+    if (sfinfo->thread_pointer >= sfinfo->chk_in_win_ct) {
+        if(!window_download(sfinfo)) {
+            printf("getfile wrong\n");
+            goto err;
+        }
+    }
+    if (sfinfo->sent_chunk_pointer >= sfinfo->chunk_num) {
         event_free(sfinfo->tm_ev);
         evhttp_send_reply_end(sfinfo->req);
+        for(int i = 0; i < sfinfo->chk_in_win_ct; i++)
+            evbuffer_free(sfinfo->evb_array[i]);
         free(sfinfo);
         return;
     }
     event_add(sfinfo->tm_ev, &timeout);
     return;
 err:
-    evhttp_send_error(sfinfo->req, 404, NULL);
+    evhttp_send_error(sfinfo->req, 404, "Shit!");
+    event_free(sfinfo->tm_ev);
+    evhttp_send_reply_end(sfinfo->req);
+    for(int i = 0; i < sfinfo->chk_in_win_ct; i++){
+        evbuffer_free(sfinfo->evb_array[i]);
+    }
+    free(sfinfo);
 }
 
 
@@ -68,9 +87,9 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     sfinfo->tm_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
     sfinfo->alive_node_num = 0L;
     memset(sfinfo->alive_nodes, 0, sizeof(sfinfo->alive_nodes));
-    sfinfo->completed_count = 0;
-    sfinfo->window_size = 5000000L;
+    sfinfo->window_size = 10000000L;
     sfinfo->chunk_size = 1000000L;
+    sfinfo->sent_chunk_pointer = 0;
 
     /* Must initialize libcurl before any threads are started */
     curl_global_init(CURL_GLOBAL_ALL);
@@ -96,11 +115,6 @@ void do_request_cb(struct evhttp_request *req, void *arg){
 
     if(!preparation_process(sfinfo, ni_list))
         goto err;
-
-    if(!get_file(sfinfo)) {
-        printf("getfile wrong\n");
-        goto err;
-    }
 
     const char *type = guess_content_type(decoded_path);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);

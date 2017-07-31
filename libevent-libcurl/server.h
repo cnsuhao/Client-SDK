@@ -88,15 +88,17 @@ struct send_file_ctx {
     size_t alive_node_num;
     struct node_info alive_nodes[NODE_NUM_MAX];
 
-    size_t thread_count;
-    size_t completed_count;
+    int thread_pointer;
     pthread_t thread_id[THREAD_NUM_MAX];
 
     struct evbuffer * evb_array[THREAD_NUM_MAX];
 
+    int sent_chunk_pointer;
     size_t filesize;
     size_t window_size;
+    size_t chunk_num;
     size_t chunk_size;
+    size_t chk_in_win_ct;
 };
 
 static struct timeval timeout = { 1, 0 };
@@ -151,13 +153,13 @@ int get_file_range(struct file_transfer_session_info * ftsi);
  * ftsi: 文件传输会话的具体信息
 */
 void *thread_run(void *ftsi);
-/* get_file
+/* window_download
  * 从webrtc服务器请求整个视频文件的函数
  * sfinfo: 本次发送的Context
  * ni_list: 节点信息
  * return: 请求是否成功
 */
-int get_file(struct send_file_ctx * sfinfo);
+int window_download(struct send_file_ctx *sfinfo);
 /* joint_string_cb
  * 从webrtc服务器获取json数据并拼接到userdata尾部的回调函数
  * buffer: 从服务器读取到的视频文件数据
