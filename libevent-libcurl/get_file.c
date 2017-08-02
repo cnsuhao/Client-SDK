@@ -62,13 +62,11 @@ error:
 }
 
 void *thread_run(void *ftsi){
-    struct file_transfer_session_info tmp_ftsi = *((struct file_transfer_session_info *)ftsi);
-    int ret = get_file_range(&tmp_ftsi);
+    struct file_transfer_session_info * tmp_ftsi = (struct file_transfer_session_info * )ftsi;
+    int ret = get_file_range(ftsi);
 }
 
-int window_download(struct send_file_ctx *sfinfo){
-    struct file_transfer_session_info thread_ftsi[THREAD_NUM_MAX];
-    memset(thread_ftsi, 0, sizeof(thread_ftsi));
+int window_download(struct send_file_ctx *sfinfo, struct file_transfer_session_info * thread_ftsi){
 
     size_t alive_node_num = sfinfo->alive_node_num;
     sfinfo->thread_pointer = 0;
@@ -79,6 +77,7 @@ int window_download(struct send_file_ctx *sfinfo){
         thread_ftsi[i].range = sfinfo->chunk_size;
         thread_ftsi[i].filesize = sfinfo->filesize;
         thread_ftsi[i].evb = sfinfo->evb_array[i];
+        evbuffer_drain(thread_ftsi[i].evb, evbuffer_get_length(thread_ftsi[i].evb));
         pthread_create(&(sfinfo->thread_id[i]), NULL, thread_run, (void *)&(thread_ftsi[i]));
     }
 
@@ -186,7 +185,7 @@ int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info
             tmp.range = 1L;
             tmp.evb = evbuffer_new();
             if ( get_file_range(&tmp) ) {
-                printf("node alive: %s, speed %ld\n", tmp.ni.remote_file_url, tmp.download_speed);
+                printf("node alive: %s, speed %lf\n", tmp.ni.remote_file_url, tmp.download_speed);
                 *file_size = tmp.filesize;
                 memcpy(&(alive_nodes[alive_node_num]), &(ni_list[i]), sizeof(struct node_info));
                 alive_node_num++;
@@ -220,12 +219,12 @@ int node_info_init(struct send_file_ctx *sfinfo, struct node_info * ni_list, cha
     strcpy(nodes, nodes_tmp);
     root = json_loads(nodes, 0, &error);
     if (!root) {
-        printf("preparation_process nodes wrong\n");
+        printf("node_info_init nodes wrong\n");
         goto error;
     }
     json_t *nodes_j = json_object_get(root, "nodes");
     if (!json_is_array(nodes_j)) {
-        printf("preparation_process node_array wrong\n");
+        printf("node_info_init node_array wrong\n");
         goto error;
     }
     node_num = json_array_size(nodes_j);

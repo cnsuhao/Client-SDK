@@ -14,25 +14,58 @@ const char * guess_content_type(const char *path) {
 }
 
 void send_file_cb(int fd, short events, void *ctx) {
+    timer++;
+    printf("tick tick %d\n", timer);
+
     struct send_file_ctx *sfinfo = ctx;
+    struct file_transfer_session_info thread_ftsi[THREAD_NUM_MAX];
 
     if (sfinfo->sent_chunk_pointer <= 0){
-        if(!window_download(sfinfo)) {
+        memset(thread_ftsi, 0, sizeof(thread_ftsi));
+        if(!window_download(sfinfo, thread_ftsi)) {
             printf("getfile wrong\n");
             goto err;
         }
     }
 
     int t_ptr = sfinfo->thread_pointer;
-    pthread_join(sfinfo->thread_id[t_ptr], NULL);
-    struct evbuffer *evb = sfinfo->evb_array[t_ptr];
-    printf("sent_chunk: %d  evbuffer len: %ld\n", sfinfo->sent_chunk_pointer, evbuffer_get_length(evb));
-    evhttp_send_reply_chunk(sfinfo->req, evb);
-    sfinfo->sent_chunk_pointer++;
-    sfinfo->thread_pointer++;
+    if (sfinfo->sent_chunk_pointer < sfinfo->chk_in_win_ct){
+        /* 如果是第一个窗口，那么需要强行等待所有线程结束，以便测速 */
+        pthread_join(sfinfo->thread_id[t_ptr], NULL);
+        struct evbuffer *evb = sfinfo->evb_array[t_ptr];
+        printf("sent_chunk: %d  evbuffer len: %ld   speed: %lf\n",
+               sfinfo->sent_chunk_pointer,
+               evbuffer_get_length(evb),
+               thread_ftsi[t_ptr].download_speed);
+        evhttp_send_reply_chunk(sfinfo->req, evb);
+        sfinfo->sent_chunk_pointer++;
+        sfinfo->thread_pointer++;
 
-    if (sfinfo->thread_pointer >= sfinfo->chk_in_win_ct) {
-        if(!window_download(sfinfo)) {
+        /* 如果第一个窗口全部下载完了，那么可以根据速度来对节点排序 */
+        if (sfinfo->sent_chunk_pointer == sfinfo->chk_in_win_ct)
+            sort_alive_nodes(sfinfo, thread_ftsi);
+    } else if (sfinfo->thread_pointer < sfinfo->chk_in_win_ct) {
+        struct evbuffer *evb = sfinfo->evb_array[t_ptr];
+        size_t len = evbuffer_get_length(evb);
+        /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发 */
+        if (len == sfinfo->chunk_size
+                || len == sfinfo->filesize - (sfinfo->chunk_num-1)*sfinfo->chunk_size){
+            printf("sent_chunk: %d  evbuffer len: %ld   speed: %lf\n",
+                   sfinfo->sent_chunk_pointer,
+                   evbuffer_get_length(evb),
+                   thread_ftsi[t_ptr].download_speed);
+            evhttp_send_reply_chunk(sfinfo->req, evb);
+            sfinfo->sent_chunk_pointer++;
+            sfinfo->thread_pointer++;
+        }
+    }
+
+    /* 每隔5s进行一次窗口滑动 */
+    if (timer >= 10) {
+        timer = 0;
+        /* 滑动窗口，从已经发送的最后一个chunk处作为起始chunk */
+        memset(thread_ftsi, 0, sizeof(thread_ftsi));
+        if(!window_download(sfinfo, thread_ftsi)) {
             printf("getfile wrong\n");
             goto err;
         }
@@ -94,6 +127,8 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     sfinfo->window_size = 10000000L;
     sfinfo->chunk_size = 1000000L;
     sfinfo->sent_chunk_pointer = 0;
+
+    timer = 0;
 
     /* Must initialize libcurl before any threads are started */
     curl_global_init(CURL_GLOBAL_ALL);

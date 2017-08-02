@@ -65,7 +65,7 @@ struct file_transfer_session_info {
     size_t pos;
     size_t range;
     size_t filesize;
-    size_t download_speed;
+    double download_speed;
 
     struct evbuffer *evb;
 };
@@ -99,6 +99,8 @@ struct send_file_ctx {
 };
 
 static struct timeval timeout = { 1, 0 };
+
+static int timer;
 
 struct event_base *base;
 struct evhttp *http;
@@ -171,7 +173,7 @@ void *thread_run(void *ftsi);
  * ni_list: 节点信息
  * return: 请求是否成功
 */
-int window_download(struct send_file_ctx *sfinfo);
+int window_download(struct send_file_ctx *sfinfo, struct file_transfer_session_info * thread_ftsi);
 /* joint_string_cb
  * 从webrtc服务器获取json数据并拼接到userdata尾部的回调函数
  * buffer: 从服务器读取到的视频文件数据
@@ -240,5 +242,6 @@ int preparation_process(struct send_file_ctx * sfinfo, struct node_info * ni_lis
 
 /* first_aid.c */
 
+int sort_alive_nodes(struct send_file_ctx *sfinfo, struct file_transfer_session_info *thread_ftsi);
 
 #endif
