@@ -1,5 +1,3 @@
-/* http://www.cnblogs.com/zlcxbb/p/6006861.html */
-
 #ifndef __SERVER_H_
 #define __SERVER_H_
 #include <stdio.h>
@@ -16,8 +14,6 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <pthread.h>
-#include <regex.h>
-#include <time.h>
 #include <assert.h>
 #include <errno.h>
 #include <sys/socket.h>
@@ -60,15 +56,16 @@ struct node_info {
     char protocol[10];
     char remote_file_url[URL_LENGTH_MAX];
     char type[10];
-
+    double score;
 };
 
 struct file_transfer_session_info {
     struct node_info ni;
 
-    long pos;
-    long range;
+    size_t pos;
+    size_t range;
     size_t filesize;
+    size_t download_speed;
 
     struct evbuffer *evb;
 };
@@ -85,7 +82,7 @@ struct send_file_ctx {
     char md5[50];
 
     char whole_path[URL_LENGTH_MAX];
-    size_t alive_node_num;
+    int alive_node_num;
     struct node_info alive_nodes[NODE_NUM_MAX];
 
     int thread_pointer;
@@ -96,9 +93,9 @@ struct send_file_ctx {
     int sent_chunk_pointer;
     size_t filesize;
     size_t window_size;
-    size_t chunk_num;
+    int chunk_num;
     size_t chunk_size;
-    size_t chk_in_win_ct;
+    int chk_in_win_ct;
 };
 
 static struct timeval timeout = { 1, 0 };
@@ -106,6 +103,9 @@ static struct timeval timeout = { 1, 0 };
 struct event_base *base;
 struct evhttp *http;
 struct evhttp_bound_socket *handle;
+
+
+/* send_file.c */
 
 /* guess_content_type
  * 猜测请求的文件类型
@@ -123,6 +123,18 @@ void send_file_cb(int fd, short events, void *ctx);
  */
 void do_request_cb(struct evhttp_request *req, void *arg);
 
+
+
+
+
+
+
+
+
+
+
+
+/* get_file.c */
 
 /* header_cb
  * 从webrtc服务器下载视频文件时从response header中获取content length的回调函数
@@ -199,6 +211,15 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
 */
 int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info *alive_nodes, size_t *file_size);
 
+/* node_info_init
+ * 根据获得的json初始化node列表
+ * sfinfo: 本次发送的Context
+ * ni_list: 节点信息
+ * nodes: json字符串
+ * return: 节点数目
+*/
+int node_info_init(struct send_file_ctx *sfinfo, struct node_info * ni_list, char * nodes);
+
 /* preparation_process
  * 从webrtc服务器请求视频文件的准备工作，比如登录，获取节点以及检测可用节点
  * sfinfo: 本次发送的Context
@@ -206,6 +227,18 @@ int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info
  * return: 请求是否成功
 */
 int preparation_process(struct send_file_ctx * sfinfo, struct node_info * ni_list);
+
+
+
+
+
+
+
+
+
+
+
+/* first_aid.c */
 
 
 #endif

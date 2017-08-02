@@ -50,6 +50,10 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
     if (r != CURLE_OK){
         printf("get_file_range perform wrong\n");
         ret = 0;
+    }else{
+        r = curl_easy_getinfo(curlhandle, CURLINFO_SPEED_DOWNLOAD, &ftsi->download_speed);
+        if (r != CURLE_OK)
+            printf("get_file_range SPEED option not supported\n");
     }
 error:
     if (curlhandle)
@@ -182,7 +186,7 @@ int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info
             tmp.range = 1L;
             tmp.evb = evbuffer_new();
             if ( get_file_range(&tmp) ) {
-                printf("node alive: %s\n", tmp.ni.remote_file_url);
+                printf("node alive: %s, speed %ld\n", tmp.ni.remote_file_url, tmp.download_speed);
                 *file_size = tmp.filesize;
                 memcpy(&(alive_nodes[alive_node_num]), &(ni_list[i]), sizeof(struct node_info));
                 alive_node_num++;
@@ -200,13 +204,60 @@ int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info
 
 }
 
+int node_info_init(struct send_file_ctx *sfinfo, struct node_info * ni_list, char * nodes){
+    json_error_t error;
+    json_t *root = NULL;
+    int node_num = 0;
+
+    /* there are some BUG here!!!!!!!!!!! */
+    char nodes_tmp[URL_LENGTH_MAX*10];
+    for(int i = strlen(nodes)-1; i >= 0; i--){
+        if(nodes[i] == '}'){
+            strncpy(nodes_tmp, nodes, i+1);
+            break;
+        }
+    }
+    strcpy(nodes, nodes_tmp);
+    root = json_loads(nodes, 0, &error);
+    if (!root) {
+        printf("preparation_process nodes wrong\n");
+        goto error;
+    }
+    json_t *nodes_j = json_object_get(root, "nodes");
+    if (!json_is_array(nodes_j)) {
+        printf("preparation_process node_array wrong\n");
+        goto error;
+    }
+    node_num = json_array_size(nodes_j);
+    for(int i = 0; i < node_num; i++){
+        json_t *node = json_array_get(json_object_get(root, "nodes"), i);
+        json_t *protocol = json_object_get(node, "protocol");
+        const char *protocol_str = json_string_value(protocol);
+        strcpy(ni_list[i].protocol, protocol_str);
+        if (strcmp(protocol_str, "https") == 0 || strcmp(protocol_str, "http") == 0){
+            json_t *host = json_object_get(node, "host");
+            const char *host_str = json_string_value(host);
+            sprintf(ni_list[i].remote_file_url, "%s://%s/%s%s", protocol_str, host_str, sfinfo->host, sfinfo->uri);
+        } else {
+            json_t *magnet = json_object_get(node, "magnet_uri");
+            const char *magnet_str = json_string_value(magnet);
+            sprintf(ni_list[i].remote_file_url, "%s", magnet_str);
+        }
+    }
+error:
+    if (root)
+        json_decref(root);
+    return node_num;
+}
+
+
 int preparation_process(struct send_file_ctx *sfinfo, struct node_info * ni_list){
     int ret = 1;
     char token[URL_LENGTH_MAX];
     char nodes[URL_LENGTH_MAX*10];
     json_error_t error;
     json_t *root = NULL;
-    size_t node_num = 0L;
+    int node_num = 0;
 
     if(sfinfo->window_size <= 0 || sfinfo->chunk_size <= 0 || sfinfo->window_size % sfinfo->chunk_size != 0){
         printf("preparation_process param wrong\n");
@@ -228,44 +279,12 @@ int preparation_process(struct send_file_ctx *sfinfo, struct node_info * ni_list
     const char *token_str = json_string_value(token_j);
 
     ret = get_node(sfinfo->client_ip, sfinfo->host, sfinfo->uri, sfinfo->md5, token_str, nodes);
-    json_decref(root);
-    root = NULL;
-    char nodes_tmp[URL_LENGTH_MAX*10];
-    for(int i = strlen(nodes)-1; i >= 0; i--){
-        if(nodes[i] == '}'){
-            strncpy(nodes_tmp, nodes, i+1);
-            break;
-        }
-    }
-    strcpy(nodes, nodes_tmp);
-    root = json_loads(nodes, 0, &error);
-    if (!root || !ret) {
-        ret = 0;
-        printf("preparation_process nodes wrong\n");
+    if (!ret) {
+        printf("preparation_process get_nodes wrong\n");
         goto error;
     }
-    json_t *nodes_j = json_object_get(root, "nodes");
-    if (!json_is_array(nodes_j)) {
-        ret = 0;
-        printf("preparation_process node_array wrong\n");
-        goto error;
-    }
-    node_num = json_array_size(nodes_j);
-    for(int i = 0; i < node_num; i++){
-        json_t *node = json_array_get(json_object_get(root, "nodes"), i);
-        json_t *protocol = json_object_get(node, "protocol");
-        const char *protocol_str = json_string_value(protocol);
-        strcpy(ni_list[i].protocol, protocol_str);
-        if (strcmp(protocol_str, "https") == 0 || strcmp(protocol_str, "http") == 0){
-            json_t *host = json_object_get(node, "host");
-            const char *host_str = json_string_value(host);
-            sprintf(ni_list[i].remote_file_url, "%s://%s/%s%s", protocol_str, host_str, sfinfo->host, sfinfo->uri);
-        } else {
-            json_t *magnet = json_object_get(node, "magnet_uri");
-            const char *magnet_str = json_string_value(magnet);
-            sprintf(ni_list[i].remote_file_url, "%s", magnet_str);
-        }
-    }
+
+    node_num = node_info_init(sfinfo, ni_list, nodes);
 
     sfinfo->alive_node_num = get_node_alive(ni_list, node_num, sfinfo->alive_nodes, &(sfinfo->filesize));
     if (sfinfo->alive_node_num <= 0 || sfinfo->filesize <= 0) {
@@ -280,7 +299,7 @@ int preparation_process(struct send_file_ctx *sfinfo, struct node_info * ni_list
     sfinfo->chunk_num = sfinfo->filesize / sfinfo->chunk_size + 1;
 
 
-    printf("node num %ld    alive num: %ld\n", node_num, sfinfo->alive_node_num);
+    printf("node num %d    alive num: %d\n", node_num, sfinfo->alive_node_num);
     printf("preparation_process done\n");
 
 error:

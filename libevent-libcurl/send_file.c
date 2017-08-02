@@ -62,6 +62,10 @@ err:
  * if you're literally calling sleep(), or you're calling evhttp_send_reply_chunk() in a loop,
  * you can't do that in an event-based application. You need to schedule a callback to happen
  * later. Nothing works while your function is running, only in between your functions.
+ * nothing will be sent during your loop, so
+ * DO NOT USE ANT LOOP IN YOUR FUNCTION!
+ * DO NOT USE ANT LOOP IN YOUR FUNCTION!
+ * DO NOT USE ANT LOOP IN YOUR FUNCTION!
  * https://github.com/libevent/libevent/issues/536
  */
 void do_request_cb(struct evhttp_request *req, void *arg){
