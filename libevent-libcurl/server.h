@@ -212,7 +212,7 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
  * alive_node_num: 活着的节点数量的指针
  * return: 活着的节点数目
 */
-int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info *alive_nodes, size_t *file_size);
+int get_node_alive(struct node_info * ni_list, size_t node_num, struct send_file_ctx *sfinfo);
 
 /* node_info_init
  * 根据获得的json初始化node列表
@@ -243,6 +243,6 @@ int preparation_process(struct send_file_ctx * sfinfo, struct node_info * ni_lis
 
 /* first_aid.c */
 
-int sort_alive_nodes(struct send_file_ctx *sfinfo, struct file_transfer_session_info *thread_ftsi);
+void sort_alive_nodes(struct send_file_ctx *sfinfo, double * download_speeds);
 
 #endif

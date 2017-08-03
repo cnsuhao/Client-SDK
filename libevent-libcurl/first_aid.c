@@ -1,20 +1,20 @@
 #include "server.h"
 
-int sort_alive_nodes(struct send_file_ctx *sfinfo, struct file_transfer_session_info * thread_ftsi){
+void sort_alive_nodes(struct send_file_ctx *sfinfo, double * download_speeds){
 
     for(int i = 1; i < sfinfo->alive_node_num; i++) {
         int j = i;
-        while(j > 0 && (thread_ftsi[j].download_speed > thread_ftsi[j-1].download_speed)) {
-            struct file_transfer_session_info tmp;
-            memcpy(&tmp, &thread_ftsi[j], sizeof(struct file_transfer_session_info));
-            memcpy(&thread_ftsi[j], &thread_ftsi[j-1], sizeof(struct file_transfer_session_info));
-            memcpy(&thread_ftsi[j-1], &tmp, sizeof(struct file_transfer_session_info));
+        while(j > 0 && download_speeds[j] > download_speeds[j-1]) {
+            double tmp;
+            struct node_info tmp_node;
+            tmp = download_speeds[j];
+            download_speeds[j] = download_speeds[j-1];
+            download_speeds[j-1] = tmp;
+            memcpy(&tmp_node, &sfinfo->alive_nodes[j], sizeof(struct node_info));
+            memcpy(&sfinfo->alive_nodes[j], &sfinfo->alive_nodes[j-1], sizeof(struct node_info));
+            memcpy(&sfinfo->alive_nodes[j-1], &tmp_node, sizeof(struct node_info));
             j--;
         }
-    }
-
-    for(int i = 0; i < sfinfo->alive_node_num; i++) {
-        memcpy(&sfinfo->alive_nodes[i], &(thread_ftsi[i].ni), sizeof(struct node_info));
     }
 
 }

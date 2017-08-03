@@ -18,7 +18,7 @@ void send_file_cb(int fd, short events, void *ctx) {
     struct file_transfer_session_info thread_ftsi[THREAD_NUM_MAX];
 
     sfinfo->timer++;
-    //    printf("tick tick %d\n", sfinfo->timer);
+    printf("tick tick %d\n", sfinfo->timer);
 
     if (sfinfo->sent_chunk_pointer >= sfinfo->chunk_num) {
         event_free(sfinfo->tm_ev);
@@ -39,38 +39,35 @@ void send_file_cb(int fd, short events, void *ctx) {
 
     int t_ptr = sfinfo->thread_pointer;
     if (sfinfo->sent_chunk_pointer < sfinfo->chk_in_win_ct){
-        /* 如果是第一个窗口，那么需要强行等待所有线程结束，以便测速 */
+        /* 如果是第一个窗口，那么需要强行等待所有节点 */
         pthread_join(sfinfo->thread_id[t_ptr], NULL);
         struct evbuffer *evb = sfinfo->evb_array[t_ptr];
-        //        printf("sent_chunk: %d  evbuffer len: %ld   ",
-        //               sfinfo->sent_chunk_pointer,
-        //               evbuffer_get_length(evb));
+        printf("sent_chunk: %d  evbuffer len: %ld   ",
+               sfinfo->sent_chunk_pointer,
+               evbuffer_get_length(evb));
         evhttp_send_reply_chunk(sfinfo->req, evb);
         sfinfo->sent_chunk_pointer++;
         sfinfo->thread_pointer++;
-        //        printf("speed: %lf\n", thread_ftsi[t_ptr].download_speed);
+        printf("speed: %lf\n", thread_ftsi[t_ptr].download_speed);
 
-        /* 如果第一个窗口全部下载完了，那么可以根据速度来对节点排序 */
-        if (sfinfo->sent_chunk_pointer == sfinfo->chk_in_win_ct)
-            sort_alive_nodes(sfinfo, thread_ftsi);
     } else if (sfinfo->thread_pointer < sfinfo->chk_in_win_ct) {
         struct evbuffer *evb = sfinfo->evb_array[t_ptr];
         size_t len = evbuffer_get_length(evb);
         /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发 */
         if (len == sfinfo->chunk_size
                 || len == sfinfo->filesize - (sfinfo->chunk_num-1)*sfinfo->chunk_size){
-            //            printf("sent_chunk: %d  evbuffer len: %ld   ",
-            //                   sfinfo->sent_chunk_pointer,
-            //                   evbuffer_get_length(evb));
+            printf("sent_chunk: %d  evbuffer len: %ld   ",
+                   sfinfo->sent_chunk_pointer,
+                   evbuffer_get_length(evb));
             evhttp_send_reply_chunk(sfinfo->req, evb);
             sfinfo->sent_chunk_pointer++;
             sfinfo->thread_pointer++;
-            //            printf("speed: %lf\n", thread_ftsi[t_ptr].download_speed);
+            printf("speed: %lf\n", thread_ftsi[t_ptr].download_speed);
         }
     }
 
     /* 每隔5s进行一次窗口滑动 */
-    if (sfinfo->timer >= 10) {
+    if (sfinfo->timer >= 5) {
         sfinfo->timer = 0;
         /* 滑动窗口，从已经发送的最后一个chunk处作为起始chunk */
         memset(thread_ftsi, 0, sizeof(thread_ftsi));
@@ -114,8 +111,8 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     sfinfo->tm_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
     sfinfo->alive_node_num = 0L;
     memset(sfinfo->alive_nodes, 0, sizeof(sfinfo->alive_nodes));
-    sfinfo->window_size = 10000000L;
-    sfinfo->chunk_size = 1000000L;
+    sfinfo->window_size = 5000000L;
+    sfinfo->chunk_size = 500000L;
     sfinfo->sent_chunk_pointer = 0;
 
     sfinfo->timer = 0;

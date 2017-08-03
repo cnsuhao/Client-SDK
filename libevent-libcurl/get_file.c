@@ -169,35 +169,60 @@ error:
     return ret;
 }
 
-int get_node_alive(struct node_info * ni_list, size_t node_num, struct node_info * alive_nodes, size_t * file_size){
+int get_node_alive(struct node_info * ni_list, size_t node_num, struct send_file_ctx * sfinfo){
+    int alive_node_num = 0;
+    pthread_t tid[NODE_NUM_MAX];
+    struct file_transfer_session_info tmp_ftsis[NODE_NUM_MAX];
+    double download_speeds[NODE_NUM_MAX];
+    size_t test_range = 10000L;
+
     if (ni_list == NULL || node_num <= 0){
         printf("get_node_alive wrong\n");
         return 0;
     }
-    size_t alive_node_num = 0L;
 
     /* find which node can be used for transmission */
     for(int i = 0; i < node_num; i++){
         if (strcmp(ni_list[i].protocol, "https") == 0 || strcmp(ni_list[i].protocol, "http") == 0){
-            struct file_transfer_session_info tmp;
-            memcpy(&(tmp.ni), &(ni_list[i]), sizeof(struct node_info));
-            tmp.pos = 0L;
-            tmp.range = 1L;
-            tmp.evb = evbuffer_new();
-            if ( get_file_range(&tmp) ) {
-                printf("node alive: %s, speed %lf\n", tmp.ni.remote_file_url, tmp.download_speed);
-                *file_size = tmp.filesize;
-                memcpy(&(alive_nodes[alive_node_num]), &(ni_list[i]), sizeof(struct node_info));
-                alive_node_num++;
-            }else{
-                printf("node dead: %s\n", tmp.ni.remote_file_url);
-            }
-            evbuffer_free(tmp.evb);
+            memcpy(&(tmp_ftsis[i].ni), &(ni_list[i]), sizeof(struct node_info));
+            tmp_ftsis[i].pos = 0L;
+            tmp_ftsis[i].range = test_range;
+            tmp_ftsis[i].filesize = test_range;
+            tmp_ftsis[i].evb = evbuffer_new();
+            pthread_create(&tid[i], NULL, thread_run, (void *)&(tmp_ftsis[i]));
         } else {
             /* magnet or other protocol added here */
 
         }
     }
+
+    for(int i = 0; i < node_num; i++){
+        if (strcmp(ni_list[i].protocol, "https") == 0 || strcmp(ni_list[i].protocol, "http") == 0){
+            pthread_join(tid[i], NULL);
+            if ( tmp_ftsis[i].filesize >= test_range
+                 && test_range == evbuffer_get_length(tmp_ftsis[i].evb) ) {
+                printf("node alive: %s, speed %lf\n", tmp_ftsis[i].ni.remote_file_url, tmp_ftsis[i].download_speed);
+                sfinfo->filesize = tmp_ftsis[i].filesize;
+                download_speeds[alive_node_num] = tmp_ftsis[i].download_speed;
+                memcpy(&(sfinfo->alive_nodes[alive_node_num]), &(ni_list[i]), sizeof(struct node_info));
+                alive_node_num++;
+            }else{
+                printf("node dead: %s\n", tmp_ftsis[i].ni.remote_file_url);
+            }
+            evbuffer_free(tmp_ftsis[i].evb);
+        } else {
+            /* magnet or other protocol added here */
+
+        }
+    }
+
+    sfinfo->alive_node_num = alive_node_num;
+
+    sort_alive_nodes(sfinfo, download_speeds);
+
+    //    for(int i = 0; i < alive_node_num; i++) {
+    //        printf("node sorted: %s\n", sfinfo->alive_nodes[i].remote_file_url);
+    //    }
 
     return alive_node_num;
 
@@ -285,7 +310,7 @@ int preparation_process(struct send_file_ctx *sfinfo, struct node_info * ni_list
 
     node_num = node_info_init(sfinfo, ni_list, nodes);
 
-    sfinfo->alive_node_num = get_node_alive(ni_list, node_num, sfinfo->alive_nodes, &(sfinfo->filesize));
+    get_node_alive(ni_list, node_num, sfinfo);
     if (sfinfo->alive_node_num <= 0 || sfinfo->filesize <= 0) {
         ret = 0;
         printf("preparation_process alive_node_num wrong\n");
