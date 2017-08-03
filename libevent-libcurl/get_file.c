@@ -48,7 +48,7 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
     curl_easy_setopt(curlhandle, CURLOPT_RANGE, range_str);
     CURLcode r = curl_easy_perform(curlhandle);
     if (r != CURLE_OK){
-        printf("get_file_range perform wrong\n");
+        printf("get_file_range error %s     range: %s\n", ftsi->ni.remote_file_url, range_str);
         ret = 0;
     }else{
         r = curl_easy_getinfo(curlhandle, CURLINFO_SPEED_DOWNLOAD, &ftsi->download_speed);

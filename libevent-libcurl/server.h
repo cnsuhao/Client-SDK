@@ -96,11 +96,12 @@ struct send_file_ctx {
     int chunk_num;
     size_t chunk_size;
     int chk_in_win_ct;
+
+
+    int timer;
 };
 
 static struct timeval timeout = { 1, 0 };
-
-static int timer;
 
 struct event_base *base;
 struct evhttp *http;

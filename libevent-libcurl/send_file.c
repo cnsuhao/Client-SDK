@@ -14,11 +14,11 @@ const char * guess_content_type(const char *path) {
 }
 
 void send_file_cb(int fd, short events, void *ctx) {
-    timer++;
-    printf("tick tick %d\n", timer);
-
     struct send_file_ctx *sfinfo = ctx;
     struct file_transfer_session_info thread_ftsi[THREAD_NUM_MAX];
+
+    sfinfo->timer++;
+    //    printf("tick tick %d\n", sfinfo->timer);
 
     if (sfinfo->sent_chunk_pointer >= sfinfo->chunk_num) {
         event_free(sfinfo->tm_ev);
@@ -42,13 +42,13 @@ void send_file_cb(int fd, short events, void *ctx) {
         /* 如果是第一个窗口，那么需要强行等待所有线程结束，以便测速 */
         pthread_join(sfinfo->thread_id[t_ptr], NULL);
         struct evbuffer *evb = sfinfo->evb_array[t_ptr];
-        printf("sent_chunk: %d  evbuffer len: %ld   ",
-               sfinfo->sent_chunk_pointer,
-               evbuffer_get_length(evb));
+        //        printf("sent_chunk: %d  evbuffer len: %ld   ",
+        //               sfinfo->sent_chunk_pointer,
+        //               evbuffer_get_length(evb));
         evhttp_send_reply_chunk(sfinfo->req, evb);
         sfinfo->sent_chunk_pointer++;
         sfinfo->thread_pointer++;
-        printf("speed: %lf\n", thread_ftsi[t_ptr].download_speed);
+        //        printf("speed: %lf\n", thread_ftsi[t_ptr].download_speed);
 
         /* 如果第一个窗口全部下载完了，那么可以根据速度来对节点排序 */
         if (sfinfo->sent_chunk_pointer == sfinfo->chk_in_win_ct)
@@ -59,19 +59,19 @@ void send_file_cb(int fd, short events, void *ctx) {
         /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发 */
         if (len == sfinfo->chunk_size
                 || len == sfinfo->filesize - (sfinfo->chunk_num-1)*sfinfo->chunk_size){
-            printf("sent_chunk: %d  evbuffer len: %ld   ",
-                   sfinfo->sent_chunk_pointer,
-                   evbuffer_get_length(evb));
+            //            printf("sent_chunk: %d  evbuffer len: %ld   ",
+            //                   sfinfo->sent_chunk_pointer,
+            //                   evbuffer_get_length(evb));
             evhttp_send_reply_chunk(sfinfo->req, evb);
             sfinfo->sent_chunk_pointer++;
             sfinfo->thread_pointer++;
-            printf("speed: %lf\n", thread_ftsi[t_ptr].download_speed);
+            //            printf("speed: %lf\n", thread_ftsi[t_ptr].download_speed);
         }
     }
 
     /* 每隔5s进行一次窗口滑动 */
-    if (timer >= 10) {
-        timer = 0;
+    if (sfinfo->timer >= 10) {
+        sfinfo->timer = 0;
         /* 滑动窗口，从已经发送的最后一个chunk处作为起始chunk */
         memset(thread_ftsi, 0, sizeof(thread_ftsi));
         if(!window_download(sfinfo, thread_ftsi)) {
@@ -91,17 +91,6 @@ err:
     free(sfinfo);
 }
 
-
-/*
- * if you're literally calling sleep(), or you're calling evhttp_send_reply_chunk() in a loop,
- * you can't do that in an event-based application. You need to schedule a callback to happen
- * later. Nothing works while your function is running, only in between your functions.
- * nothing will be sent during your loop, so
- * DO NOT USE ANT LOOP IN YOUR FUNCTION!
- * DO NOT USE ANT LOOP IN YOUR FUNCTION!
- * DO NOT USE ANT LOOP IN YOUR FUNCTION!
- * https://github.com/libevent/libevent/issues/536
- */
 void do_request_cb(struct evhttp_request *req, void *arg){
     const char *docroot = arg;
     const char *uri = evhttp_request_get_uri(req);
@@ -129,7 +118,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     sfinfo->chunk_size = 1000000L;
     sfinfo->sent_chunk_pointer = 0;
 
-    timer = 0;
+    sfinfo->timer = 0;
 
     /* Must initialize libcurl before any threads are started */
     curl_global_init(CURL_GLOBAL_ALL);
