@@ -39,8 +39,8 @@
 #endif
 
 #define URL_LENGTH_MAX 1024
-#define NODE_NUM_MAX 100
-#define THREAD_NUM_MAX 100
+#define NODE_NUM_MAX 50
+#define THREAD_NUM_MAX 50
 
 static const struct table_entry {
     const char *extension;
@@ -70,6 +70,15 @@ struct file_transfer_session_info {
     struct evbuffer *evb;
 };
 
+struct thread_pool {
+    int win_num;
+    int sending_chunk_no[THREAD_NUM_MAX];
+
+    struct file_transfer_session_info thread_ftsi[THREAD_NUM_MAX];
+    pthread_t thread_id[THREAD_NUM_MAX];
+};
+
+
 struct send_file_ctx {
     struct evhttp_request *req;
     struct event *tm_ev;
@@ -85,12 +94,9 @@ struct send_file_ctx {
     int alive_node_num;
     struct node_info alive_nodes[NODE_NUM_MAX];
 
-    int thread_pointer;
-    pthread_t thread_id[THREAD_NUM_MAX];
+    struct thread_pool tp;
 
-    struct evbuffer * evb_array[THREAD_NUM_MAX];
-
-    int sent_chunk_pointer;
+    int sent_chunk_num;
     size_t filesize;
     size_t window_size;
     int chunk_num;
@@ -171,10 +177,9 @@ void *thread_run(void *ftsi);
 /* window_download
  * 从webrtc服务器请求整个视频文件的函数
  * sfinfo: 本次发送的Context
- * ni_list: 节点信息
  * return: 请求是否成功
 */
-int window_download(struct send_file_ctx *sfinfo, struct file_transfer_session_info * thread_ftsi);
+int window_download(struct send_file_ctx *sfinfo);
 /* joint_string_cb
  * 从webrtc服务器获取json数据并拼接到userdata尾部的回调函数
  * buffer: 从服务器读取到的视频文件数据
@@ -230,6 +235,8 @@ int node_info_init(struct send_file_ctx *sfinfo, struct node_info * ni_list, cha
  * return: 请求是否成功
 */
 int preparation_process(struct send_file_ctx * sfinfo, struct node_info * ni_list);
+
+
 
 
 

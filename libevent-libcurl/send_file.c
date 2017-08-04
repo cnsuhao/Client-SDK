@@ -15,63 +15,51 @@ const char * guess_content_type(const char *path) {
 
 void send_file_cb(int fd, short events, void *ctx) {
     struct send_file_ctx *sfinfo = ctx;
-    struct file_transfer_session_info thread_ftsi[THREAD_NUM_MAX];
 
     sfinfo->timer++;
     printf("tick tick %d\n", sfinfo->timer);
 
-    if (sfinfo->sent_chunk_pointer >= sfinfo->chunk_num) {
+    if (sfinfo->sent_chunk_num >= sfinfo->chunk_num) {
         event_free(sfinfo->tm_ev);
         evhttp_send_reply_end(sfinfo->req);
-        for(int i = 0; i < sfinfo->chk_in_win_ct; i++)
-            evbuffer_free(sfinfo->evb_array[i]);
+        for(int i = 0; i < THREAD_NUM_MAX; i++)
+            evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
         free(sfinfo);
         return;
     }
 
-    if (sfinfo->sent_chunk_pointer <= 0){
-        memset(thread_ftsi, 0, sizeof(thread_ftsi));
-        if(!window_download(sfinfo, thread_ftsi)) {
+    if (sfinfo->tp.win_num <= 0){
+        if(!window_download(sfinfo)) {
             printf("getfile wrong\n");
             goto err;
         }
     }
 
-    int t_ptr = sfinfo->thread_pointer;
-    if (sfinfo->sent_chunk_pointer < sfinfo->chk_in_win_ct){
-        /* 如果是第一个窗口，那么需要强行等待所有节点 */
-        pthread_join(sfinfo->thread_id[t_ptr], NULL);
-        struct evbuffer *evb = sfinfo->evb_array[t_ptr];
-        printf("sent_chunk: %d  evbuffer len: %ld   ",
-               sfinfo->sent_chunk_pointer,
-               evbuffer_get_length(evb));
-        evhttp_send_reply_chunk(sfinfo->req, evb);
-        sfinfo->sent_chunk_pointer++;
-        sfinfo->thread_pointer++;
-        printf("speed: %lf\n", thread_ftsi[t_ptr].download_speed);
+    int win_total = sfinfo->tp.win_num * sfinfo->chk_in_win_ct;
 
-    } else if (sfinfo->thread_pointer < sfinfo->chk_in_win_ct) {
-        struct evbuffer *evb = sfinfo->evb_array[t_ptr];
-        size_t len = evbuffer_get_length(evb);
-        /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发 */
-        if (len == sfinfo->chunk_size
-                || len == sfinfo->filesize - (sfinfo->chunk_num-1)*sfinfo->chunk_size){
-            printf("sent_chunk: %d  evbuffer len: %ld   ",
-                   sfinfo->sent_chunk_pointer,
-                   evbuffer_get_length(evb));
-            evhttp_send_reply_chunk(sfinfo->req, evb);
-            sfinfo->sent_chunk_pointer++;
-            sfinfo->thread_pointer++;
-            printf("speed: %lf\n", thread_ftsi[t_ptr].download_speed);
+    for(int i = 0; i < win_total; i++)
+        if( sfinfo->tp.sending_chunk_no[i] == sfinfo->sent_chunk_num ){
+            struct evbuffer *evb = sfinfo->tp.thread_ftsi[i].evb;
+            size_t len = evbuffer_get_length(evb);
+            printf("i: %d   len: %ld\n", i, len);
+            /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发 */
+            if (len == sfinfo->chunk_size
+                    || len == sfinfo->filesize - (sfinfo->chunk_num-1)*sfinfo->chunk_size){
+                printf("sent_chunk: %d  evbuffer len: %ld   ",
+                       sfinfo->sent_chunk_num,
+                       evbuffer_get_length(evb));
+                evhttp_send_reply_chunk(sfinfo->req, evb);
+                sfinfo->sent_chunk_num++;
+                printf("speed: %lf\n", sfinfo->tp.thread_ftsi[i].download_speed);
+                break;
+            }
         }
-    }
 
     /* 每隔5s进行一次窗口滑动 */
     if (sfinfo->timer >= 5) {
         sfinfo->timer = 0;
         /* 滑动窗口，从已经发送的最后一个chunk处作为起始chunk */
-        memset(thread_ftsi, 0, sizeof(thread_ftsi));
-        if(!window_download(sfinfo, thread_ftsi)) {
+        if(!window_download(sfinfo)) {
             printf("getfile wrong\n");
             goto err;
         }
@@ -82,8 +70,8 @@ err:
     evhttp_send_error(sfinfo->req, 404, "Shit!");
     event_free(sfinfo->tm_ev);
     evhttp_send_reply_end(sfinfo->req);
-    for(int i = 0; i < sfinfo->chk_in_win_ct; i++){
-        evbuffer_free(sfinfo->evb_array[i]);
+    for(int i = 0; i < THREAD_NUM_MAX; i++){
+        evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
     }
     free(sfinfo);
 }
@@ -113,7 +101,13 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     memset(sfinfo->alive_nodes, 0, sizeof(sfinfo->alive_nodes));
     sfinfo->window_size = 5000000L;
     sfinfo->chunk_size = 500000L;
-    sfinfo->sent_chunk_pointer = 0;
+    sfinfo->sent_chunk_num = 0;
+
+    memset(sfinfo->tp.thread_ftsi, 0, sizeof(sfinfo->tp.thread_ftsi));
+    for(int i = 0; i < THREAD_NUM_MAX; i++){
+        sfinfo->tp.thread_ftsi[i].evb = evbuffer_new();
+        sfinfo->tp.sending_chunk_no[i] = 0;
+    }
 
     sfinfo->timer = 0;
 
