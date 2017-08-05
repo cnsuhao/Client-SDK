@@ -3,6 +3,10 @@
 ![client architecture](../fig/client_architecture.png)
 对于local http server，这里的实现方式为使用libevent库和libcurl协作完成，其中Libevent为一个事件驱动的底层网络库，其主要逻辑为：
 ![libevent main](fig_for_doc/main.png)
+libevent内部有一个事件监听循环，这里记为event loop，该循环会不断监听绑定的端口发送来的请求，如果收到请求，则调用请求相对的回调函数do_request_cb，这个回调函数主要功能如下：
+![libevent do_request_cb](fig_for_doc/do_request_cb.png)
+do_request_cb最后一步为初始化发送数据的event，该event触发时会调用回调函数send_file_cb，该函数主要功能为：
+![libevent do_request_cb](fig_for_doc/send_file_cb.png)
 
 # 编译方式及运行
 ## 编译方式
