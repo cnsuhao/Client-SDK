@@ -41,7 +41,6 @@ void send_file_cb(int fd, short events, void *ctx) {
         if( sfinfo->tp.sending_chunk_no[i] == sfinfo->sent_chunk_num ){
             struct evbuffer *evb = sfinfo->tp.thread_ftsi[i].evb;
             size_t len = evbuffer_get_length(evb);
-            printf("i: %d   len: %ld\n", i, len);
             /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发 */
             if (len == sfinfo->chunk_size
                     || len == sfinfo->filesize - (sfinfo->chunk_num-1)*sfinfo->chunk_size){
@@ -56,7 +55,7 @@ void send_file_cb(int fd, short events, void *ctx) {
         }
 
     /* 每隔5s进行一次窗口滑动 */
-    if (sfinfo->timer >= 5) {
+    if (sfinfo->timer >= 10) {
         sfinfo->timer = 0;
         /* 滑动窗口，从已经发送的最后一个chunk处作为起始chunk */
         if(!window_download(sfinfo)) {
@@ -99,8 +98,8 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     sfinfo->tm_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
     sfinfo->alive_node_num = 0L;
     memset(sfinfo->alive_nodes, 0, sizeof(sfinfo->alive_nodes));
-    sfinfo->window_size = 5000000L;
-    sfinfo->chunk_size = 500000L;
+    sfinfo->window_size = 10000000L;
+    sfinfo->chunk_size = 1000000L;
     sfinfo->sent_chunk_num = 0;
 
     memset(sfinfo->tp.thread_ftsi, 0, sizeof(sfinfo->tp.thread_ftsi));
