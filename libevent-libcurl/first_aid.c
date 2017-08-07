@@ -1,4 +1,4 @@
-#include "server.h"
+#include "first_aid.h"
 
 void sort_alive_nodes(struct send_file_ctx *sfinfo, double * download_speeds){
 

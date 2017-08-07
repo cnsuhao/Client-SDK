@@ -1,4 +1,5 @@
-#include "server.h"
+#include "send_file.h"
+#include "get_file.h"
 
 const char * guess_content_type(const char *path) {
     const char *last_period, *extension;

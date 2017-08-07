@@ -1,4 +1,5 @@
-#include "server.h"
+#include "send_file.h"
+#include "get_file.h"
 
 int main(int argc, char **argv)
 {

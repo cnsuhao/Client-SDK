@@ -1,4 +1,5 @@
-#include "server.h"
+#include "get_file.h"
+#include "first_aid.h"
 
 size_t header_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
     long start, end, len = 0;
@@ -39,7 +40,7 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
     curl_easy_setopt(curlhandle, CURLOPT_HEADERDATA, &(ftsi->filesize));
     curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, ftsi->evb);
     curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, write_buffer_cb);
-    curl_easy_setopt(curlhandle, CURLOPT_TIMEOUT, 49L);
+    curl_easy_setopt(curlhandle, CURLOPT_TIMEOUT, ftsi->download_timeout);
 
     if ( ftsi->filesize >= ftsi->pos + ftsi->range - 1 ){
         sprintf(range_str, "%ld-%ld", ftsi->pos, ftsi->pos + ftsi->range - 1);
