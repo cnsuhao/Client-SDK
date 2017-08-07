@@ -99,6 +99,10 @@ struct file_transfer_session_info {
      */
     double download_speed;
     /**
+     * @brief 该线程下载的平均速度
+     */
+    size_t download_timeout;
+    /**
      * @brief 该线程下载时保存数据的缓冲区，由libevent提供
      */
     struct evbuffer *evb;
@@ -211,7 +215,7 @@ struct send_file_ctx {
 };
 
 static struct timeval timeout = { 1, 0 };
-
+static struct timeval win_slide = { 10, 0 };
 struct event_base *base;
 struct evhttp *http;
 struct evhttp_bound_socket *handle;

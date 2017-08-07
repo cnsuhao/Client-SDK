@@ -100,6 +100,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     memset(sfinfo->alive_nodes, 0, sizeof(sfinfo->alive_nodes));
     sfinfo->window_size = 10000000L;
     sfinfo->chunk_size = 1000000L;
+    sfinfo->tp.win_num = 0;
     sfinfo->sent_chunk_num = 0;
 
     memset(sfinfo->tp.thread_ftsi, 0, sizeof(sfinfo->tp.thread_ftsi));

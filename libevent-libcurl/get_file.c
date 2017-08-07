@@ -23,7 +23,7 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
     char range_str[URL_LENGTH_MAX];
 
     if ( strlen(ftsi->ni.remote_file_url) <= 0 || ftsi->pos < 0
-         || ftsi->range < 0){
+         || ftsi->range < 0 || ftsi->pos >= ftsi->filesize){
         printf("get_file_range param wrong\n");
         ret = 0;
         goto error;
@@ -39,6 +39,7 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
     curl_easy_setopt(curlhandle, CURLOPT_HEADERDATA, &(ftsi->filesize));
     curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, ftsi->evb);
     curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, write_buffer_cb);
+    curl_easy_setopt(curlhandle, CURLOPT_TIMEOUT, 49L);
 
     if ( ftsi->filesize >= ftsi->pos + ftsi->range - 1 ){
         sprintf(range_str, "%ld-%ld", ftsi->pos, ftsi->pos + ftsi->range - 1);
@@ -84,6 +85,7 @@ int window_download(struct send_file_ctx *sfinfo){
         sfinfo->tp.thread_ftsi[thread_index].pos = (sfinfo->sent_chunk_num + i - win_total) * sfinfo->chunk_size;
         sfinfo->tp.thread_ftsi[thread_index].range = sfinfo->chunk_size;
         sfinfo->tp.thread_ftsi[thread_index].filesize = sfinfo->filesize;
+        sfinfo->tp.thread_ftsi[thread_index].download_timeout = THREAD_NUM_MAX / sfinfo->chk_in_win_ct * win_slide.tv_sec - 1;
         evbuffer_drain(sfinfo->tp.thread_ftsi[thread_index].evb,
                        evbuffer_get_length(sfinfo->tp.thread_ftsi[thread_index].evb));
         pthread_create(&(sfinfo->tp.thread_id[thread_index]), NULL,
