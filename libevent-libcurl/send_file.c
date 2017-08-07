@@ -18,14 +18,18 @@ void send_file_cb(int fd, short events, void *ctx) {
     struct send_file_ctx *sfinfo = ctx;
 
     sfinfo->timer++;
-    printf("tick tick %d\n", sfinfo->timer);
+    printf("tick tick %d and sent: %d\n", sfinfo->timer, sfinfo->sent_chunk_num);
 
     if (sfinfo->sent_chunk_num >= sfinfo->chunk_num) {
+        printf("finished sending?????????????\n");
         event_free(sfinfo->tm_ev);
         evhttp_send_reply_end(sfinfo->req);
-        for(int i = 0; i < THREAD_NUM_MAX; i++)
+        for(int i = 0; i < THREAD_NUM_MAX; i++){
+            printf("lalala evbuffer len: %ld\n", evbuffer_get_length(sfinfo->tp.thread_ftsi[i].evb));
             evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
+        }
         free(sfinfo);
+        printf("finished sending!!!!!!!!!\n");
         return;
     }
 

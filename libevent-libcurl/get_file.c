@@ -19,20 +19,18 @@ size_t write_buffer_cb(char *buffer, size_t size, size_t nitems, void *userdata)
 }
 
 int get_file_range(struct file_transfer_session_info * ftsi) {
-    int ret = 1;
     CURL *curlhandle = NULL;
     char range_str[URL_LENGTH_MAX];
 
     if ( strlen(ftsi->ni.remote_file_url) <= 0 || ftsi->pos < 0
-         || ftsi->range < 0 || ftsi->pos >= ftsi->filesize){
+         || ftsi->range < 0 || ftsi->pos >= ftsi->filesize
+         || ftsi->evb == NULL){
         printf("get_file_range param wrong\n");
-        ret = 0;
         goto error;
     }
     curlhandle = curl_easy_init();
     if (curlhandle == NULL){
         printf("get_file_range curl wrong\n");
-        ret = 0;
         goto error;
     }
     curl_easy_setopt(curlhandle, CURLOPT_URL, ftsi->ni.remote_file_url);
@@ -51,16 +49,21 @@ int get_file_range(struct file_transfer_session_info * ftsi) {
     CURLcode r = curl_easy_perform(curlhandle);
     if (r != CURLE_OK){
         printf("get_file_range error %s     range: %s\n", ftsi->ni.remote_file_url, range_str);
-        ret = 0;
+        goto error;
     }else{
         r = curl_easy_getinfo(curlhandle, CURLINFO_SPEED_DOWNLOAD, &ftsi->download_speed);
         if (r != CURLE_OK)
             printf("get_file_range SPEED option not supported\n");
     }
+    if (curlhandle)
+        curl_easy_cleanup(curlhandle);
+    return 1;
 error:
     if (curlhandle)
         curl_easy_cleanup(curlhandle);
-    return ret;
+    if (ftsi->evb)
+        evbuffer_drain(ftsi->evb, evbuffer_get_length(ftsi->evb));
+    return 0;
 }
 
 void *thread_run(void *ftsi){
