@@ -47,7 +47,8 @@ void send_file_cb(int fd, short events, void *ctx) {
             size_t len = evbuffer_get_length(evb);
             /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发 */
             if (len == sfinfo->chunk_size
-                    || len == sfinfo->filesize - (sfinfo->chunk_num-1)*sfinfo->chunk_size){
+                    ||(sfinfo->filesize-(sfinfo->chunk_num-1)*sfinfo->chunk_size == len
+                       && sfinfo->chunk_num-1 == sfinfo->tp.sending_chunk_no[i])){
                 printf("sent_chunk: %d  evbuffer len: %ld   ",
                        sfinfo->sent_chunk_num,
                        evbuffer_get_length(evb));

@@ -367,11 +367,11 @@ int check_download(struct send_file_ctx * sfinfo, int sending_chunk_no){
             struct evbuffer *evb = sfinfo->tp.thread_ftsi[i].evb;
             size_t len = evbuffer_get_length(evb);
             if (len == sfinfo->chunk_size
-                    || len == sfinfo->filesize - (sfinfo->chunk_num - 1)*sfinfo->chunk_size){
+                    ||(sfinfo->filesize-(sfinfo->chunk_num-1)*sfinfo->chunk_size == len
+                       && sfinfo->chunk_num-1 == sending_chunk_no)){
+                printf("chunk download over: %d\n", sending_chunk_no);
                 return 1;
             }
-            else
-                return 0;
         }
     return 0;
 }
