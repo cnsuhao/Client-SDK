@@ -13,3 +13,7 @@
 排除重复下载的部分
 ## 如果到达超时时间，应该发送bug
 ## 二次播放会出现Segmentation fault
+### 触发原因
+检查是否下载完成的函数check_download中下标越界
+### 解决方案 
+使用core dump排查，参考资料http://www.cnblogs.com/Anker/p/6079580.html

@@ -361,8 +361,7 @@ error:
 
 
 int check_download(struct send_file_ctx * sfinfo, int sending_chunk_no){
-    int win_total = sfinfo->tp.win_num * sfinfo->chk_in_win_ct;
-    for(int i = 0; i < win_total; i++)
+    for(int i = 0; i < THREAD_NUM_MAX; i++)
         if( sfinfo->tp.sending_chunk_no[i] == sending_chunk_no ){
             struct evbuffer *evb = sfinfo->tp.thread_ftsi[i].evb;
             size_t len = evbuffer_get_length(evb);

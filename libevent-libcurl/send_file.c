@@ -39,9 +39,7 @@ void send_file_cb(int fd, short events, void *ctx) {
         }
     }
 
-    int win_total = sfinfo->tp.win_num * sfinfo->chk_in_win_ct;
-
-    for(int i = 0; i < win_total; i++)
+    for(int i = 0; i < THREAD_NUM_MAX; i++)
         if( sfinfo->tp.sending_chunk_no[i] == sfinfo->sent_chunk_num ){
             struct evbuffer *evb = sfinfo->tp.thread_ftsi[i].evb;
             size_t len = evbuffer_get_length(evb);
