@@ -7,4 +7,9 @@
 ## Assertion buf->last_with_datap == &buf->first failed in evbuffer_chain_insert的bug
 非常难以重现，现在暂时不管
 ## 资源重复下载
+### 触发原因
+窗口滑动之后会重复下载
+### 解决方案 
+排除重复下载的部分
 ## 如果到达超时时间，应该发送bug
+## 二次播放会出现Segmentation fault
