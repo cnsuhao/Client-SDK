@@ -25,7 +25,6 @@ void send_file_cb(int fd, short events, void *ctx) {
         event_free(sfinfo->tm_ev);
         evhttp_send_reply_end(sfinfo->req);
         for(int i = 0; i < THREAD_NUM_MAX; i++){
-            printf("lalala evbuffer len: %ld\n", evbuffer_get_length(sfinfo->tp.thread_ftsi[i].evb));
             evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
         }
         free(sfinfo);

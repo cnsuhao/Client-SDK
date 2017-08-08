@@ -76,17 +76,18 @@ int window_download(struct send_file_ctx *sfinfo){
     size_t alive_node_num = sfinfo->alive_node_num;
 
     int win_total = sfinfo->tp.win_num * sfinfo->chk_in_win_ct;
-//    if (win_total == THREAD_NUM_MAX
-//            && sfinfo->sent_chunk_num <= sfinfo->tp.sending_chunk_no[sfinfo->chk_in_win_ct-1]){
-//        return 1;
-//    }
-
     printf("win_num %d\n", sfinfo->tp.win_num);
+    int sending_chunk_no = sfinfo->sent_chunk_num;
     for (int i = win_total; i < win_total + sfinfo->chk_in_win_ct; i++) {
-        int chunk_index = (i - win_total) % alive_node_num;
+        int node_index = (i - win_total) % alive_node_num;
         int thread_index = i % THREAD_NUM_MAX;
-        memcpy(&(sfinfo->tp.thread_ftsi[thread_index].ni), &(sfinfo->alive_nodes[chunk_index]), sizeof(struct node_info));
-        sfinfo->tp.thread_ftsi[thread_index].pos = (sfinfo->sent_chunk_num + i - win_total) * sfinfo->chunk_size;
+        if (check_download(sfinfo, sending_chunk_no)){
+            sending_chunk_no++;
+            i--;
+            continue;
+        }
+        memcpy(&(sfinfo->tp.thread_ftsi[thread_index].ni), &(sfinfo->alive_nodes[node_index]), sizeof(struct node_info));
+        sfinfo->tp.thread_ftsi[thread_index].pos = sending_chunk_no * sfinfo->chunk_size;
         sfinfo->tp.thread_ftsi[thread_index].range = sfinfo->chunk_size;
         sfinfo->tp.thread_ftsi[thread_index].filesize = sfinfo->filesize;
         sfinfo->tp.thread_ftsi[thread_index].download_timeout = THREAD_NUM_MAX / sfinfo->chk_in_win_ct * win_slide.tv_sec - 1;
@@ -94,7 +95,8 @@ int window_download(struct send_file_ctx *sfinfo){
                        evbuffer_get_length(sfinfo->tp.thread_ftsi[thread_index].evb));
         pthread_create(&(sfinfo->tp.thread_id[thread_index]), NULL,
                        thread_run, (void *)&(sfinfo->tp.thread_ftsi[thread_index]));
-        sfinfo->tp.sending_chunk_no[thread_index] = sfinfo->sent_chunk_num + i - win_total;
+        sfinfo->tp.sending_chunk_no[thread_index] = sending_chunk_no;
+        sending_chunk_no++;
         printf("sending_chunk_no %d: %d at %s from %ld\n",
                thread_index, sfinfo->tp.sending_chunk_no[thread_index],
                sfinfo->tp.thread_ftsi[thread_index].ni.remote_file_url,
@@ -102,6 +104,11 @@ int window_download(struct send_file_ctx *sfinfo){
     }
     sfinfo->tp.win_num++;
     printf("win_num %d\n", sfinfo->tp.win_num);
+    printf("thread pool: <");
+    for(int i = 0; i < THREAD_NUM_MAX; i++){
+        printf("%d ", sfinfo->tp.sending_chunk_no[i]);
+    }
+    printf(">\n");
     printf("window_download end\n");
     return 1;
 }
@@ -350,5 +357,22 @@ error:
     if (root)
         json_decref(root);
     return ret;
+}
+
+
+int check_download(struct send_file_ctx * sfinfo, int sending_chunk_no){
+    int win_total = sfinfo->tp.win_num * sfinfo->chk_in_win_ct;
+    for(int i = 0; i < win_total; i++)
+        if( sfinfo->tp.sending_chunk_no[i] == sending_chunk_no ){
+            struct evbuffer *evb = sfinfo->tp.thread_ftsi[i].evb;
+            size_t len = evbuffer_get_length(evb);
+            if (len == sfinfo->chunk_size
+                    || len == sfinfo->filesize - (sfinfo->chunk_num - 1)*sfinfo->chunk_size){
+                return 1;
+            }
+            else
+                return 0;
+        }
+    return 0;
 }
 

@@ -92,5 +92,12 @@ int node_info_init(struct send_file_ctx *sfinfo, struct node_info * ni_list, cha
 */
 int preparation_process(struct send_file_ctx * sfinfo, struct node_info * ni_list);
 
+/* check_download
+ * 检查第i个thread是否下载完
+ * sfinfo: 本次发送的Context
+ * return: 是否下载完
+*/
+int check_download(struct send_file_ctx * sfinfo, int sending_chunk_no);
+
 
 #endif // GET_FILE_H
