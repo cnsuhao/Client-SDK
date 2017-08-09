@@ -24,6 +24,9 @@ void send_file_cb(int fd, short events, void *ctx) {
         printf("finished sending?????????????\n");
         event_free(sfinfo->tm_ev);
         evhttp_send_reply_end(sfinfo->req);
+        for(int i = 0; i < THREAD_NUM_MAX; i++)
+            if(-1 != sfinfo->tp.sending_chunk_no[i])
+                pthread_join(sfinfo->tp.thread_id[i], NULL);
         for(int i = 0; i < THREAD_NUM_MAX; i++){
             evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
         }
@@ -39,8 +42,10 @@ void send_file_cb(int fd, short events, void *ctx) {
         }
     }
 
+    int find_sign = 0;
     for(int i = 0; i < THREAD_NUM_MAX; i++)
         if( sfinfo->tp.sending_chunk_no[i] == sfinfo->sent_chunk_num ){
+            find_sign = 1;
             struct evbuffer *evb = sfinfo->tp.thread_ftsi[i].evb;
             size_t len = evbuffer_get_length(evb);
             /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发 */
@@ -56,6 +61,11 @@ void send_file_cb(int fd, short events, void *ctx) {
                 break;
             }
         }
+    if (!find_sign){
+        printf("cant find sending chunk %d\n", sfinfo->sent_chunk_num);
+        goto err;
+    }
+
 
     /* 每隔5s进行一次窗口滑动 */
     if (sfinfo->timer >= 10) {
@@ -72,6 +82,9 @@ err:
     evhttp_send_error(sfinfo->req, 404, "Shit!");
     event_free(sfinfo->tm_ev);
     evhttp_send_reply_end(sfinfo->req);
+    for(int i = 0; i < THREAD_NUM_MAX; i++)
+        if(-1 != sfinfo->tp.sending_chunk_no[i])
+            pthread_join(sfinfo->tp.thread_id[i], NULL);
     for(int i = 0; i < THREAD_NUM_MAX; i++){
         evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
     }
@@ -109,7 +122,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     memset(sfinfo->tp.thread_ftsi, 0, sizeof(sfinfo->tp.thread_ftsi));
     for(int i = 0; i < THREAD_NUM_MAX; i++){
         sfinfo->tp.thread_ftsi[i].evb = evbuffer_new();
-        sfinfo->tp.sending_chunk_no[i] = 0;
+        sfinfo->tp.sending_chunk_no[i] = -1;
     }
 
     sfinfo->timer = 0;
