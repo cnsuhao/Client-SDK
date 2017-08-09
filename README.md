@@ -13,6 +13,14 @@ size_t get_json_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
 }
 ```
 
+### Android API 参考（https://www.agora.io/cn/）
+
+```
+RtcEngine rtcEngine = RtcEngine.create(mContext, appId, mEngineEventHandler.mRtcEventHandler);
+rtcEngine.joinChannel(null, channel, "Extraoptional data", uid);
+mRtcEngine.leaveChannel();
+```
+
 ## 基于HTTP/HTTPS多源P2P流媒体播放器
 
 
