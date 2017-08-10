@@ -5,7 +5,7 @@
 <img src="fig_for_doc/main.png" width = "500" height = "250"/>
 libevent内部有一个事件监听循环，这里记为event loop，该循环会不断监听绑定的端口发送来的请求，如果收到请求，则调用请求相对的回调函数do_request_cb，这个回调函数主要功能如下：
 <img src="fig_for_doc/do_request_cb.png" width = "300" height = "300"/>
-do_request_cb最后一步为初始化发送数据的event，该event触发时会调用回调函数send_file_cb，该函数主要功能为：
+do_request_cb最后一步为初始化发送数据的event，该event触发时会调用回调函数send_file_cb，该函数主要功能为(https://github.com/libevent/libevent/issues/536)：
 <img src="fig_for_doc/send_file_cb.png" width = "500" height = "300"/>
 综上，整体的运行流程是：<br>
 1. 事件监听循环event_loop监听到请求，调用回调函数do_request_cb<br>
