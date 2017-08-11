@@ -8,6 +8,14 @@
  * return: 返回文件类型
 */
 const char * guess_content_type(const char *path);
+
+/* close_connection_cb
+ * 非正常结束的请求的清空函数
+ * return
+ */
+void close_connection_cb(struct evhttp_connection * evcon, void * ctx);
+
+
 /* send_file_cb
  * 发送缓存文件的回调函数
  * return

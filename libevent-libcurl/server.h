@@ -24,7 +24,6 @@
 #include <event2/http.h>
 #include <event2/buffer.h>
 #include <event2/util.h>
-#include <event2/keyvalq_struct.h>
 #include <event2/bufferevent.h>
 #include <event2/listener.h>
 
@@ -212,6 +211,10 @@ struct send_file_ctx {
      * @brief 计时器
      */
     int timer;
+    /**
+     * @brief 连接是否结束
+     */
+    int connection_end;
 };
 
 static struct timeval timeout = { 1, 0 };

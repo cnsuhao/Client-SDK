@@ -14,14 +14,22 @@ const char * guess_content_type(const char *path) {
     }
 }
 
+void close_connection_cb(struct evhttp_connection * evcon, void * ctx){
+    struct send_file_ctx *sfinfo = ctx;
+    sfinfo->connection_end = 1;
+    printf("connection_end!\n");
+}
+
+
+
 void send_file_cb(int fd, short events, void *ctx) {
     struct send_file_ctx *sfinfo = ctx;
 
     sfinfo->timer++;
     printf("tick tick %d and sent: %d\n", sfinfo->timer, sfinfo->sent_chunk_num);
 
-    if (sfinfo->sent_chunk_num >= sfinfo->chunk_num) {
-        printf("finished sending?????????????\n");
+    if (sfinfo->connection_end || sfinfo->sent_chunk_num >= sfinfo->chunk_num) {
+        printf("connection_end or finished sending?\n");
         event_free(sfinfo->tm_ev);
         evhttp_send_reply_end(sfinfo->req);
         for(int i = 0; i < THREAD_NUM_MAX; i++)
@@ -31,7 +39,7 @@ void send_file_cb(int fd, short events, void *ctx) {
             evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
         }
         free(sfinfo);
-        printf("finished sending!!!!!!!!!\n");
+        printf("connection_end or finished sending!\n");
         return;
     }
 
@@ -79,7 +87,7 @@ void send_file_cb(int fd, short events, void *ctx) {
     event_add(sfinfo->tm_ev, &timeout);
     return;
 err:
-    evhttp_send_error(sfinfo->req, 404, "Shit!");
+    evhttp_send_error(sfinfo->req, 404, "Sayonara tomodachi!");
     event_free(sfinfo->tm_ev);
     evhttp_send_reply_end(sfinfo->req);
     for(int i = 0; i < THREAD_NUM_MAX; i++)
@@ -97,6 +105,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     struct evhttp_uri *decoded = NULL;
     const char *path;
     char *decoded_path;
+    char content_length[100];
 
     struct send_file_ctx *sfinfo = malloc(sizeof(struct send_file_ctx));
     struct node_info ni_list[NODE_NUM_MAX];
@@ -124,8 +133,11 @@ void do_request_cb(struct evhttp_request *req, void *arg){
         sfinfo->tp.thread_ftsi[i].evb = evbuffer_new();
         sfinfo->tp.sending_chunk_no[i] = -1;
     }
-
     sfinfo->timer = 0;
+    sfinfo->connection_end = 0;
+
+    struct evhttp_connection* evcon = evhttp_request_get_connection(sfinfo->req);
+    evhttp_connection_set_closecb(evcon, close_connection_cb, sfinfo);
 
     /* Must initialize libcurl before any threads are started */
     curl_global_init(CURL_GLOBAL_ALL);
@@ -153,7 +165,9 @@ void do_request_cb(struct evhttp_request *req, void *arg){
         goto err;
 
     const char *type = guess_content_type(decoded_path);
+    sprintf(content_length, "%ld", sfinfo->filesize);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", content_length);
     evhttp_send_reply_start(req, HTTP_OK, "OK");
 
     event_add(sfinfo->tm_ev, &timeout);
