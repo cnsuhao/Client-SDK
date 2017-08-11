@@ -28,6 +28,19 @@ do_request_cb最后一步为初始化发送数据的event，该event触发时会
 根据send_file_cb的流程图，每次滑动窗口时调用函数window_download，此函数都会开启新的线程，开启的线程数量根据预先配置的chunk大小和window大小决定，若chunk为1MB，window为10MB，则每次开启10个线程。下载的具体策略请见Client-SDK/README.md。<br>
 直接下载文件的函数为get_file_range，此函数使用libcurl，支持http byte-range请求。
 
+## 窗口滑动及下载流程
+现在以图示表现下载过程，上方为要下载的文件，假设文件被划分为数个chunk，每个chunk的大小为chunk_size，每个chunk均有其编号。下方为滑动窗口的缓冲区，假设我们最多允许THREAD_NUM_MAX个线程同时下载，每次窗口滑动时都会新产生chk_in_win_ct个新的线程。此示例中，假设文件大小13.5MB，chunk_size为1MB，则一共划分为14个chunk，设置THREAD_NUM_MAX为9，chk_in_win_ct为3，滑动窗口间隔为win_slide秒，每个线程对应的chunk号如图所示。
+<img src="fig_for_doc/0.png" width = "1000" height = "250"/>
+一开始下载时，没有线程在下载数据，此时线程对应的chunk号均为-1。
+<img src="fig_for_doc/1.png" width = "1000" height = "250"/>
+do_request_cb执行完之后，触发第一次的send_file_cb，此时要发送的chunk编号为0，但是并没有任何一个线程正在下载chunk 0，因此开启chk_in_win_ct = 3个新线程，使其下载0,1,2号
+<img src="fig_for_doc/2.png" width = "1000" height = "250"/>
+经过win_slide秒之后，发现chunk 1, chunk 2下载完了，然而需要发送的chunk 0还没下载完，此时进行滑动窗口，新开启chk_in_win_ct个线程，优先下载没下载完的chunk 0，剩下2个线程顺序接着下载后面的数据，最终新开启的线程分别下载0,3,4号
+<img src="fig_for_doc/3.png" width = "1000" height = "250"/>
+经过win_slide秒之后，发现thread 0已经下载完了chunk 0，thread 4下载好了chunk 3，此时chunk 0-3都可以顺序发送，则发送数据，发送过的chunk以红色表示，此时进行滑动窗口，下一个需要发送的chunk 4还没下载完，优先下载没下载完的chunk 4，剩下2个线程顺序接着下载后面的数据，最终新开启的线程分别下载4,5,6号
+<img src="fig_for_doc/4.png" width = "1000" height = "250"/>
+经过win_slide秒之后，发现thread 5,6都下载好了chunk 4，取其中任意一个发送即可，此时进行滑动窗口，因为此时THREAD_NUM_MAX已经被占满了，因此重新复用前三块缓冲区，优先下载没下载完的chunk 5，最终新开启的线程分别下载5,7,8号。<br>
+最后以此类推，最终下载并发送完全部数据即可。
 
 # 编译方式及运行
 ## 编译方式
