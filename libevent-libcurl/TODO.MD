@@ -1,5 +1,10 @@
 ## 未能回收非正常结束的请求的资源
+### 触发原因
 请求被中断的时候，ffplay或浏览器会发送rst包，如何在这个rst包出现的时候终止请求呢？
+### 解决方案
+struct evhttp_connection* evcon = evhttp_request_get_connection(sfinfo->req);<br>
+evhttp_connection_set_closecb(evcon, close_connection_cb, sfinfo);<br>
+设置连接关闭时的函数
 ## 滑动窗口时会有线程不安全的问题
 ### 触发原因
 产生线程不安全的缘故在于，现在的线程池里每个线程对应一个线程下载信息file_transfer_session_info，这个结构体中有个缓存evbuffer，此buffer是该线程下载文件时存储数据的地方，假设线程池满了，新的线程会从线程池的头部重新使用线程id，此时若线程池的开头的线程还没结束，就会造成新的线程会和原本的线程写同一块的evbuffer，因此出现线程不安全。

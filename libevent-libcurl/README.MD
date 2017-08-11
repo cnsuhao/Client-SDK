@@ -37,3 +37,7 @@ make
 ./server ~/test
 第一个参数设置为服务器的根目录文件夹，端口号为60000，之后任意访问服务器下的某个文件，就能输出结果。
 
+# 参考文献
+libcurl: https://curl.haxx.se/libcurl/c/<br>
+libevent: https://sourcecodebrowser.com/libevent/2.0.3-alpha/files.html<br>
+

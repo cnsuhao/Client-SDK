@@ -38,6 +38,8 @@ void send_file_cb(int fd, short events, void *ctx) {
         for(int i = 0; i < THREAD_NUM_MAX; i++){
             evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
         }
+        /* bug可能触发：如果发送完所有数据，释放了sfinfo，但此时由于时序问题，
+        才调用到close_connection_cb，则会出现线程不安全的问题 */
         free(sfinfo);
         printf("connection_end or finished sending!\n");
         return;
