@@ -187,6 +187,10 @@ struct send_file_ctx {
      */
     int sent_chunk_num;
     /**
+     * @brief 请求下载的起始位置
+     */
+    size_t pos;
+    /**
      * @brief 文件大小
      */
     size_t filesize;

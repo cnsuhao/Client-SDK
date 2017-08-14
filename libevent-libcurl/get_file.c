@@ -87,7 +87,7 @@ int window_download(struct send_file_ctx *sfinfo){
             continue;
         }
         memcpy(&(sfinfo->tp.thread_ftsi[thread_index].ni), &(sfinfo->alive_nodes[node_index]), sizeof(struct node_info));
-        sfinfo->tp.thread_ftsi[thread_index].pos = sending_chunk_no * sfinfo->chunk_size;
+        sfinfo->tp.thread_ftsi[thread_index].pos = sending_chunk_no * sfinfo->chunk_size + sfinfo->pos;
         sfinfo->tp.thread_ftsi[thread_index].range = sfinfo->chunk_size;
         sfinfo->tp.thread_ftsi[thread_index].filesize = sfinfo->filesize;
         sfinfo->tp.thread_ftsi[thread_index].download_timeout = THREAD_NUM_MAX / sfinfo->chk_in_win_ct * win_slide.tv_sec - 1;
@@ -330,12 +330,14 @@ int preparation_process(struct send_file_ctx *sfinfo, struct node_info * ni_list
     }
     json_t *token_j = json_object_get(root, "token");
     const char *token_str = json_string_value(token_j);
+    // printf("token: %s\n", token_str);
 
     ret = get_node(sfinfo->client_ip, sfinfo->host, sfinfo->uri, sfinfo->md5, token_str, nodes);
     if (!ret) {
         printf("preparation_process get_nodes wrong\n");
         goto error;
     }
+    // printf("nodes: %s\n", nodes);
 
     node_num = node_info_init(sfinfo, ni_list, nodes);
 
@@ -347,7 +349,7 @@ int preparation_process(struct send_file_ctx *sfinfo, struct node_info * ni_list
     }
 
     sfinfo->chk_in_win_ct = sfinfo->window_size / sfinfo->chunk_size;
-    sfinfo->chunk_num = sfinfo->filesize / sfinfo->chunk_size + 1;
+    sfinfo->chunk_num = (sfinfo->filesize - sfinfo->pos) / sfinfo->chunk_size + 1;
 
 
     printf("node num %d    alive num: %d\n", node_num, sfinfo->alive_node_num);
@@ -366,7 +368,7 @@ int check_download(struct send_file_ctx * sfinfo, int sending_chunk_no){
             struct evbuffer *evb = sfinfo->tp.thread_ftsi[i].evb;
             size_t len = evbuffer_get_length(evb);
             if (len == sfinfo->chunk_size
-                    ||(sfinfo->filesize-(sfinfo->chunk_num-1)*sfinfo->chunk_size == len
+                    ||(sfinfo->filesize-sfinfo->pos-(sfinfo->chunk_num-1)*sfinfo->chunk_size == len
                        && sfinfo->chunk_num-1 == sending_chunk_no)){
                 printf("chunk download over: %d\n", sending_chunk_no);
                 return 1;

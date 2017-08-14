@@ -58,9 +58,10 @@ void send_file_cb(int fd, short events, void *ctx) {
             find_sign = 1;
             struct evbuffer *evb = sfinfo->tp.thread_ftsi[i].evb;
             size_t len = evbuffer_get_length(evb);
-            /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发 */
+            /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发: 若缓冲区中数据长度为chunk_size，
+             * 或者是最后一个chunk时，缓冲区中数据长度为最后一个chunk的长度 */
             if (len == sfinfo->chunk_size
-                    ||(sfinfo->filesize-(sfinfo->chunk_num-1)*sfinfo->chunk_size == len
+                    ||(sfinfo->filesize-sfinfo->pos-(sfinfo->chunk_num-1)*sfinfo->chunk_size == len
                        && sfinfo->chunk_num-1 == sfinfo->tp.sending_chunk_no[i])){
                 printf("sent_chunk: %d  evbuffer len: %ld   ",
                        sfinfo->sent_chunk_num,
@@ -108,6 +109,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     const char *path;
     char *decoded_path;
     char content_length[100];
+    char content_range[100];
 
     struct send_file_ctx *sfinfo = malloc(sizeof(struct send_file_ctx));
     struct node_info ni_list[NODE_NUM_MAX];
@@ -163,14 +165,42 @@ void do_request_cb(struct evhttp_request *req, void *arg){
         goto err;
     sprintf(sfinfo->whole_path, "%s%s", docroot, decoded_path);
 
+    const char * range_header = evhttp_find_header(evhttp_request_get_input_headers(req), "Range");
+    if (range_header){
+        int r = sscanf(range_header, "bytes=%ld-", &sfinfo->pos);
+        if (!r){
+            printf("do_request_cb get Range %s wrong\n", range_header);
+            goto err;
+        }
+    }else{
+        sfinfo->pos = 0;
+    }
+    printf("Range: bytes=%ld-\n", sfinfo->pos);
+
     if(!preparation_process(sfinfo, ni_list))
         goto err;
 
     const char *type = guess_content_type(decoded_path);
-    sprintf(content_length, "%ld", sfinfo->filesize);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);
-    evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", content_length);
-    evhttp_send_reply_start(req, HTTP_OK, "OK");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Connection", "keep-alive");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Origin", "*");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Credentials", "true");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Methods", "GET,POST,OPTIONS,HEAD,DELETE,PUT");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Allow-Headers", "Range,Host");
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Access-Control-Expose-Headers", "X-PEAR-ARGS,Content-Length,Content-Range");
+    /* 允许进度条拖曳的header */
+    evhttp_add_header(evhttp_request_get_output_headers(req), "Accept-Ranges", "bytes");
+    if (range_header){
+        sprintf(content_length, "%ld", sfinfo->filesize-sfinfo->pos);
+        sprintf(content_range, "bytes %ld-%ld/%ld", sfinfo->pos, sfinfo->filesize-1, sfinfo->filesize);
+        evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", content_length);
+        evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Range", content_range);
+        evhttp_send_reply_start(req, 206, "OK");
+    }else{
+        sprintf(content_length, "%ld", sfinfo->filesize);
+        evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Length", content_length);
+        evhttp_send_reply_start(req, HTTP_OK, "OK");
+    }
 
     event_add(sfinfo->tm_ev, &timeout);
     goto done;
