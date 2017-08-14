@@ -36,7 +36,7 @@ void *thread_run(void *ftsi);
  * sfinfo: 本次发送的Context
  * return: 请求是否成功
 */
-int window_download(struct send_file_ctx *sfinfo);
+void window_download(struct send_file_ctx *sfinfo);
 /* joint_string_cb
  * 从webrtc服务器获取json数据并拼接到userdata尾部的回调函数
  * buffer: 从服务器读取到的视频文件数据

@@ -22,6 +22,12 @@ void close_connection_cb(struct evhttp_connection * evcon, void * ctx);
  */
 void send_file_cb(int fd, short events, void *ctx);
 
+/* window_slide_cb
+ * 窗口滑动的回调函数
+ * return
+ */
+void window_slide_cb(int fd, short events, void *ctx);
+
 /* do_request_cb
  * 响应对本地文件的请求的libevent的回调函数
  * return

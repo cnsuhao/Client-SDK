@@ -71,7 +71,7 @@ void *thread_run(void *ftsi){
     int ret = get_file_range(ftsi_ptr);
 }
 
-int window_download(struct send_file_ctx *sfinfo){
+void window_download(struct send_file_ctx *sfinfo){
     printf("window_download begin\n");
     size_t alive_node_num = sfinfo->alive_node_num;
 
@@ -110,7 +110,6 @@ int window_download(struct send_file_ctx *sfinfo){
     }
     printf(">\n");
     printf("window_download end\n");
-    return 1;
 }
 
 /* return value must be size of data which has been process */

@@ -16,7 +16,7 @@ const char * guess_content_type(const char *path) {
 
 void close_connection_cb(struct evhttp_connection * evcon, void * ctx){
     struct send_file_ctx *sfinfo = ctx;
-    sfinfo->connection_end = 1;
+    sfinfo->context_end |= CONNECTION_END;
     printf("connection_end!\n");
 }
 
@@ -25,37 +25,15 @@ void close_connection_cb(struct evhttp_connection * evcon, void * ctx){
 void send_file_cb(int fd, short events, void *ctx) {
     struct send_file_ctx *sfinfo = ctx;
 
-    sfinfo->timer++;
-    printf("tick tick %d and sent: %d\n", sfinfo->timer, sfinfo->sent_chunk_num);
-
-    if (sfinfo->connection_end || sfinfo->sent_chunk_num >= sfinfo->chunk_num) {
-        printf("connection_end or finished sending?\n");
-        event_free(sfinfo->tm_ev);
+    if ((sfinfo->context_end & CONNECTION_END) || sfinfo->sent_chunk_num >= sfinfo->chunk_num) {
+        sfinfo->context_end |= SEND_FILE_END;
         evhttp_send_reply_end(sfinfo->req);
-        for(int i = 0; i < THREAD_NUM_MAX; i++)
-            if(-1 != sfinfo->tp.sending_chunk_no[i])
-                pthread_join(sfinfo->tp.thread_id[i], NULL);
-        for(int i = 0; i < THREAD_NUM_MAX; i++){
-            evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
-        }
-        /* bug可能触发：如果发送完所有数据，释放了sfinfo，但此时由于时序问题，
-        才调用到close_connection_cb，则会出现线程不安全的问题 */
-        free(sfinfo);
-        printf("connection_end or finished sending!\n");
+        printf("finished sending file!\n");
         return;
     }
 
-    if (sfinfo->tp.win_num <= 0){
-        if(!window_download(sfinfo)) {
-            printf("getfile wrong\n");
-            goto err;
-        }
-    }
-
-    int find_sign = 0;
     for(int i = 0; i < THREAD_NUM_MAX; i++)
         if( sfinfo->tp.sending_chunk_no[i] == sfinfo->sent_chunk_num ){
-            find_sign = 1;
             struct evbuffer *evb = sfinfo->tp.thread_ftsi[i].evb;
             size_t len = evbuffer_get_length(evb);
             /* 如果不是第一个窗口，则检查是否下载完，没下载完就不发: 若缓冲区中数据长度为chunk_size，
@@ -72,35 +50,54 @@ void send_file_cb(int fd, short events, void *ctx) {
                 break;
             }
         }
-    if (!find_sign){
-        printf("cant find sending chunk %d\n", sfinfo->sent_chunk_num);
-        goto err;
+
+    event_add(sfinfo->send_ev, &send_timeout);
+    return;
+}
+
+void window_slide_cb(int fd, short events, void *ctx){
+    struct send_file_ctx *sfinfo = ctx;
+
+    sfinfo->timer++;
+    printf("tick tick %d and sent: %d\n", sfinfo->timer, sfinfo->sent_chunk_num);
+
+    /* 回收资源 */
+    if ((sfinfo->context_end == CONTEXT_END)
+            || (sfinfo->context_end == TRANSMISSION_END)) {
+        event_free(sfinfo->send_ev);
+        event_free(sfinfo->win_ev);
+        for(int i = 0; i < THREAD_NUM_MAX; i++)
+            if(-1 != sfinfo->tp.sending_chunk_no[i])
+                pthread_join(sfinfo->tp.thread_id[i], NULL);
+        for(int i = 0; i < THREAD_NUM_MAX; i++){
+            evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
+        }
+        free(sfinfo);
+        printf("finished context!\n");
+        return;
     }
 
+    if ((sfinfo->context_end & CONNECTION_END) || sfinfo->sent_chunk_num >= sfinfo->chunk_num) {
+        sfinfo->context_end |= WINDOW_SLIDE_END;
+        printf("finished window sliding\n");
+    }
 
-    /* 每隔5s进行一次窗口滑动 */
-    if (sfinfo->timer >= 10) {
+    if (sfinfo->tp.win_num <= 0){
+        window_download(sfinfo);
+    }
+
+    /* 每隔win_slide进行一次窗口滑动 */
+    if (sfinfo->timer >= win_slide.tv_sec
+            && !(sfinfo->context_end & WINDOW_SLIDE_END)) {
         sfinfo->timer = 0;
         /* 滑动窗口，从已经发送的最后一个chunk处作为起始chunk */
-        if(!window_download(sfinfo)) {
-            printf("getfile wrong\n");
-            goto err;
-        }
+        window_download(sfinfo);
     }
-    event_add(sfinfo->tm_ev, &timeout);
+    struct timeval timeout = { 1, 0 };
+    event_add(sfinfo->win_ev, &timeout);
     return;
-err:
-    evhttp_send_error(sfinfo->req, 404, "Sayonara tomodachi!");
-    event_free(sfinfo->tm_ev);
-    evhttp_send_reply_end(sfinfo->req);
-    for(int i = 0; i < THREAD_NUM_MAX; i++)
-        if(-1 != sfinfo->tp.sending_chunk_no[i])
-            pthread_join(sfinfo->tp.thread_id[i], NULL);
-    for(int i = 0; i < THREAD_NUM_MAX; i++){
-        evbuffer_free(sfinfo->tp.thread_ftsi[i].evb);
-    }
-    free(sfinfo);
 }
+
 
 void do_request_cb(struct evhttp_request *req, void *arg){
     const char *docroot = arg;
@@ -124,7 +121,8 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     strcpy(sfinfo->uri, uri);
 
     sfinfo->req = req;
-    sfinfo->tm_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
+    sfinfo->send_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
+    sfinfo->win_ev = event_new(base, -1, 0, window_slide_cb, sfinfo);
     sfinfo->alive_node_num = 0L;
     memset(sfinfo->alive_nodes, 0, sizeof(sfinfo->alive_nodes));
     sfinfo->window_size = 10000000L;
@@ -138,7 +136,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
         sfinfo->tp.sending_chunk_no[i] = -1;
     }
     sfinfo->timer = 0;
-    sfinfo->connection_end = 0;
+    sfinfo->context_end = 0;
 
     struct evhttp_connection* evcon = evhttp_request_get_connection(sfinfo->req);
     evhttp_connection_set_closecb(evcon, close_connection_cb, sfinfo);
@@ -202,7 +200,8 @@ void do_request_cb(struct evhttp_request *req, void *arg){
         evhttp_send_reply_start(req, HTTP_OK, "OK");
     }
 
-    event_add(sfinfo->tm_ev, &timeout);
+    event_add(sfinfo->send_ev, &send_timeout);
+    event_add(sfinfo->win_ev, &send_timeout);
     goto done;
 err:
     evhttp_send_error(req, 404, NULL);
