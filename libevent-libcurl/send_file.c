@@ -64,6 +64,9 @@ void window_slide_cb(int fd, short events, void *ctx){
     /* 回收资源 */
     if ((sfinfo->context_end == CONTEXT_END)
             || (sfinfo->context_end == TRANSMISSION_END)) {
+        clock_t start, finish;
+        start = clock();
+
         event_free(sfinfo->send_ev);
         event_free(sfinfo->win_ev);
         for(int i = 0; i < THREAD_NUM_MAX; i++)
@@ -74,8 +77,13 @@ void window_slide_cb(int fd, short events, void *ctx){
         }
         free(sfinfo);
         printf("finished context!\n");
+
+        finish = clock();
+        printf("finished %lf seconds\n", (double)(finish - start)/CLOCKS_PER_SEC);
+
         return;
     }
+    
 
     if ((sfinfo->context_end & CONNECTION_END) || sfinfo->sent_chunk_num >= sfinfo->chunk_num) {
         sfinfo->context_end |= WINDOW_SLIDE_END;
@@ -109,6 +117,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     char content_range[100];
 
     struct send_file_ctx *sfinfo = malloc(sizeof(struct send_file_ctx));
+    struct evhttp_connection* evcon = evhttp_request_get_connection(req);
     struct node_info ni_list[NODE_NUM_MAX];
 
     memset(ni_list, 0, sizeof(ni_list));
@@ -123,6 +132,7 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     sfinfo->req = req;
     sfinfo->send_ev = event_new(base, -1, 0, send_file_cb, sfinfo);
     sfinfo->win_ev = event_new(base, -1, 0, window_slide_cb, sfinfo);
+    evhttp_connection_set_closecb(evcon, close_connection_cb, sfinfo);
     sfinfo->alive_node_num = 0L;
     memset(sfinfo->alive_nodes, 0, sizeof(sfinfo->alive_nodes));
     sfinfo->window_size = 10000000L;
@@ -138,8 +148,6 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     sfinfo->timer = 0;
     sfinfo->context_end = 0;
 
-    struct evhttp_connection* evcon = evhttp_request_get_connection(sfinfo->req);
-    evhttp_connection_set_closecb(evcon, close_connection_cb, sfinfo);
 
     /* Must initialize libcurl before any threads are started */
     curl_global_init(CURL_GLOBAL_ALL);
@@ -175,8 +183,13 @@ void do_request_cb(struct evhttp_request *req, void *arg){
     }
     printf("Range: bytes=%ld-\n", sfinfo->pos);
 
+    clock_t start, finish;
+    start = clock();
     if(!preparation_process(sfinfo, ni_list))
         goto err;
+    finish = clock();
+    printf("preparation %lf seconds\n", (double)(finish - start)/CLOCKS_PER_SEC);
+
 
     const char *type = guess_content_type(decoded_path);
     evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", type);
