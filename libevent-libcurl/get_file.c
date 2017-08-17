@@ -75,7 +75,7 @@ void window_download(struct send_file_ctx *sfinfo){
 
     if (check_timeout(sfinfo)){
         sfinfo->context_end |= CONNECTION_END;
-        printf("chunk %d download timeout begin\n", sfinfo->sent_chunk_num);
+        printf("chunk %d download timeout\n", sfinfo->sent_chunk_num);
         return;
     }
 
@@ -119,17 +119,13 @@ void window_download(struct send_file_ctx *sfinfo){
     printf("window_download end\n");
 }
 
-/* return value must be size of data which has been process */
-size_t joint_string_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
-    strcat(userdata, buffer);
-    return size * nitems;
-}
 
 int login(const char * username, const char * password, char * token){
     int ret = 1;
     char jsonData[URL_LENGTH_MAX];
     CURL *curlhandle = NULL;
     struct curl_slist *list = NULL;
+    struct evbuffer * evb = evbuffer_new();
 
     if (username == NULL || password == NULL){
         printf("login wrong\n");
@@ -144,8 +140,8 @@ int login(const char * username, const char * password, char * token){
         goto error;
     }
     curl_easy_setopt(curlhandle, CURLOPT_URL, "https://api.webrtc.win:6601/v1/customer/login");
-    curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, token);
-    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, joint_string_cb);
+    curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, evb);
+    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, write_buffer_cb);
     list = curl_slist_append(NULL, "Content-Type:application/json");
     curl_easy_setopt(curlhandle, CURLOPT_HTTPHEADER, list);
     curl_easy_setopt(curlhandle, CURLOPT_POSTFIELDS, jsonData);
@@ -154,12 +150,15 @@ int login(const char * username, const char * password, char * token){
     if (r != CURLE_OK){
         printf("login wrong\n");
         ret = 0;
+    } else {
+        evbuffer_remove(evb, token, evbuffer_get_length(evb));	
     }
 error:
     if (list)
         curl_slist_free_all(list);
     if (curlhandle)
         curl_easy_cleanup(curlhandle);
+    evbuffer_free(evb);
     return ret;
 }
 
@@ -169,6 +168,7 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
     char token_header[URL_LENGTH_MAX];
     CURL *curlhandle = NULL;
     struct curl_slist *list = NULL;
+    struct evbuffer * evb = evbuffer_new();
 
 
     if (client_ip == NULL || host == NULL || uri == NULL || md5 == NULL || token == NULL){
@@ -185,8 +185,8 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
         goto error;
     }
     curl_easy_setopt(curlhandle, CURLOPT_URL, url);
-    curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, nodes);
-    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, joint_string_cb);
+    curl_easy_setopt(curlhandle, CURLOPT_WRITEDATA, evb);
+    curl_easy_setopt(curlhandle, CURLOPT_WRITEFUNCTION, write_buffer_cb);
     list = curl_slist_append(NULL, token_header);
     list = curl_slist_append(list, "Content-Type:application/json");
     curl_easy_setopt(curlhandle, CURLOPT_HTTPHEADER, list);
@@ -195,12 +195,15 @@ int get_node(char * client_ip, char * host, const char * uri, char * md5, const 
     if (r != CURLE_OK){
         printf("get_node wrong\n");
         ret = 0;
+    } else {
+        evbuffer_remove(evb, nodes, evbuffer_get_length(evb));	
     }
 error:
     if (list)
         curl_slist_free_all(list);
     if (curlhandle)
         curl_easy_cleanup(curlhandle);
+    evbuffer_free(evb);
     return ret;
 }
 
@@ -385,9 +388,12 @@ int check_download(struct send_file_ctx * sfinfo, int sending_chunk_no){
 
 int check_timeout(struct send_file_ctx * sfinfo){
     int sending_chunk_no = sfinfo->sent_chunk_num;
-    int start_index = (sfinfo->tp.win_num * sfinfo->chk_in_win_ct) % THREAD_NUM_MAX;
-    if( 0 == start_index && sfinfo->tp.sending_chunk_no[0] == sending_chunk_no ){
-        return 1;    
+    int win_total = sfinfo->tp.win_num * sfinfo->chk_in_win_ct;
+    if (win_total >= THREAD_NUM_MAX){
+        int start_index = win_total % THREAD_NUM_MAX;
+        if( 0 == start_index && sfinfo->tp.sending_chunk_no[0] == sending_chunk_no ){
+            return 1;    
+        }
     }
     return 0;  
 }

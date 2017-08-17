@@ -37,15 +37,7 @@ void *thread_run(void *ftsi);
  * return: 请求是否成功
 */
 void window_download(struct send_file_ctx *sfinfo);
-/* joint_string_cb
- * 从webrtc服务器获取json数据并拼接到userdata尾部的回调函数
- * buffer: 从服务器读取到的视频文件数据
- * size: *
- * nitems: *
- * userdata: 字符串数组
- * return: 1
-*/
-size_t joint_string_cb(char *buffer, size_t size, size_t nitems, void *userdata);
+
 /* login
  * 登录webrtc服务器获取token
  * username: 用户名
