@@ -99,5 +99,12 @@ int preparation_process(struct send_file_ctx * sfinfo, struct node_info * ni_lis
 */
 int check_download(struct send_file_ctx * sfinfo, int sending_chunk_no);
 
+/* check_timeout
+ * 检查是否出现下载超时
+ * sfinfo: 本次发送的Context
+ * return: 是否出现下载超时
+*/
+int check_timeout(struct send_file_ctx * sfinfo);
+
 
 #endif // GET_FILE_H

@@ -72,6 +72,13 @@ void *thread_run(void *ftsi){
 }
 
 void window_download(struct send_file_ctx *sfinfo){
+
+    if (check_timeout(sfinfo)){
+        sfinfo->context_end |= CONNECTION_END;
+        printf("chunk %d download timeout begin\n", sfinfo->sent_chunk_num);
+        return;
+    }
+
     printf("window_download begin\n");
     size_t alive_node_num = sfinfo->alive_node_num;
 
@@ -376,3 +383,11 @@ int check_download(struct send_file_ctx * sfinfo, int sending_chunk_no){
     return 0;
 }
 
+int check_timeout(struct send_file_ctx * sfinfo){
+    int sending_chunk_no = sfinfo->sent_chunk_num;
+    int start_index = (sfinfo->tp.win_num * sfinfo->chk_in_win_ct) % THREAD_NUM_MAX;
+    if( 0 == start_index && sfinfo->tp.sending_chunk_no[0] == sending_chunk_no ){
+        return 1;    
+    }
+    return 0;  
+}
