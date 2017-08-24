@@ -1,6 +1,6 @@
 # 整体结构
 根据Client-SDK/README.md可知，整体架构为
-![client architecture](../fig/client_architecture.png)
+![client architecture](../fig/client_architecture.png)<br>
 对于local http server，这里的实现方式为使用libevent库和libcurl协作完成，其中Libevent为一个事件驱动的底层网络库，每个请求都会触发一个处理请求的事件，通过调用对应的回调函数来完成对请求的处理，libcurl是一个网络传输协议库，其主要功能是传输数据。整个程序的主要逻辑为：<br>
 <img src="fig_for_doc/main.png"/><br>
 libevent实现了一个事件监听循环，这里记为event loop，由我们创建的服务器evhttp会加入这个event loop，每次收到请求都会触发事件调用请求相对的回调函数do_request_cb，这个回调函数主要功能如下：<br>
