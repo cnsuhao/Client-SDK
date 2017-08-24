@@ -1,14 +1,14 @@
 # 整体结构
 根据Client-SDK/README.md可知，整体架构为
 ![client architecture](../fig/client_architecture.png)
-对于local http server，这里的实现方式为使用libevent库和libcurl协作完成，其中Libevent为一个事件驱动的底层网络库，每个请求都会触发一个处理请求的事件，通过调用对应的回调函数来完成对请求的处理，libcurl是一个网络传输协议库，其主要功能是传输数据。整个程序的主要逻辑为：
-<img src="fig_for_doc/main.png" width = "500" height = "250"/><br>
-libevent实现了一个事件监听循环，这里记为event loop，由我们创建的服务器evhttp会加入这个event loop，每次收到请求都会触发事件调用请求相对的回调函数do_request_cb，这个回调函数主要功能如下：
-<img src="fig_for_doc/do_request_cb.png" width = "300" height = "300"/><br>
-do_request_cb最后一步为初始化发送数据的event和窗口滑动的event，发送数据的event触发时会调用回调函数send_file_cb，其触发条件是每隔100ms触发一次，该函数主要功能为：
-<img src="fig_for_doc/send_file_cb.png" width = "500" height = "300"/><br>
-窗口滑动的event触发时会调用回调函数window_slide_cb，触发条件是每隔1s触发，该函数主要功能为：
-<img src="fig_for_doc/window_slide_cb.png" width = "500" height = "300"/><br>
+对于local http server，这里的实现方式为使用libevent库和libcurl协作完成，其中Libevent为一个事件驱动的底层网络库，每个请求都会触发一个处理请求的事件，通过调用对应的回调函数来完成对请求的处理，libcurl是一个网络传输协议库，其主要功能是传输数据。整个程序的主要逻辑为：<br>
+<img src="fig_for_doc/main.png"/><br>
+libevent实现了一个事件监听循环，这里记为event loop，由我们创建的服务器evhttp会加入这个event loop，每次收到请求都会触发事件调用请求相对的回调函数do_request_cb，这个回调函数主要功能如下：<br>
+<img src="fig_for_doc/do_request_cb.png"/><br>
+do_request_cb最后一步为初始化发送数据的event和窗口滑动的event，发送数据的event触发时会调用回调函数send_file_cb，其触发条件是每隔100ms触发一次，该函数主要功能为：<br>
+<img src="fig_for_doc/send_file_cb.png"/><br>
+窗口滑动的event触发时会调用回调函数window_slide_cb，触发条件是每隔1s触发，该函数主要功能为：<br>
+<img src="fig_for_doc/window_slide_cb.png"/><br>
 综上，整体的运行流程是：<br>
 * https://github.com/libevent/libevent/issues/536
 1. 事件监听循环event_loop监听到请求，调用回调函数do_request_cb<br>
