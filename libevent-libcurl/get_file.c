@@ -276,6 +276,7 @@ int node_info_init(struct send_file_ctx *sfinfo, struct node_info * ni_list, cha
     for(int i = strlen(nodes)-1; i >= 0; i--){
         if(nodes[i] == '}'){
             strncpy(nodes_tmp, nodes, i+1);
+            nodes_tmp[i+1] = '\0';
             break;
         }
     }
